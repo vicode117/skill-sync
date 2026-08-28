@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --background: oklch(0.985 0.002 247.9);
+  --foreground: oklch(0.208 0.042 265.8);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.208 0.042 265.8);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.208 0.042 265.8);
+  --primary: oklch(0.379 0.146 265.5);
+  --primary-foreground: oklch(0.984 0.003 247.9);
+  --secondary: oklch(0.955 0.012 260.8);
+  --secondary-foreground: oklch(0.208 0.042 265.8);
+  --muted: oklch(0.955 0.012 260.8);
+  --muted-foreground: oklch(0.446 0.043 257.3);
+  --accent: oklch(0.94 0.02 260.5);
+  --accent-foreground: oklch(0.208 0.042 265.8);
+  --destructive: oklch(0.577 0.245 27.3);
+  --destructive-foreground: oklch(0.984 0.003 247.9);
+  --success: oklch(0.627 0.17 149.2);
+  --warning: oklch(0.769 0.16 70.1);
+  --border: oklch(0.911 0.014 257.3);
+  --input: oklch(0.911 0.014 257.3);
+  --ring: oklch(0.556 0.146 265.4);
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}

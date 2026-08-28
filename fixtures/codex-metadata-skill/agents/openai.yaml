@@ -1,0 +1,3 @@
+# Tool-specific extension file (fixture).
+model: gpt-5
+temperature: 0.2

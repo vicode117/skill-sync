@@ -1,0 +1,19 @@
+[package]
+name = "skillsync-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SkillSync desktop app (Tauri 2 shell over skillsync-core)"
+
+[lib]
+name = "skillsync_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde.workspace = true
+serde_json.workspace = true
+skillsync-core.workspace = true

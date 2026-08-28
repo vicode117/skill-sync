@@ -1,0 +1,16 @@
+[package]
+name = "skillsync-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SkillSync CLI — manage Agent Skills across AI coding tools"
+
+[[bin]]
+name = "skillsync"
+path = "src/main.rs"
+
+[dependencies]
+skillsync-core.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+clap.workspace = true

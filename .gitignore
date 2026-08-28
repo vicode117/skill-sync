@@ -1,0 +1,18 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+*.local
+.vite/
+
+# Tauri
+**/src-tauri/gen/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
