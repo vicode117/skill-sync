@@ -49,7 +49,8 @@ pnpm tauri dev            # desktop app
 cargo test                # core tests (uses temp dirs + fixtures/ only)
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings
-pnpm tauri build          # bundle for current platform
+pnpm tauri build          # bundle for current platform (.app on macOS;
+                          # add "dmg" to bundle.targets for a disk image)
 ```
 
 Repository layout and architecture rules: [`AGENTS.md`](AGENTS.md),
