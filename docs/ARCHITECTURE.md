@@ -1,9 +1,10 @@
 # SkillSync Architecture
 
-Status: design for MVP. Slices 1–3 implemented (read-only discovery,
-canonical store adoption/import, one-way sync with managed-ownership
-tracking). Tool-directory writes happen only through explicit user
-commands (sync/import in CLI or GUI), preview-first, never automatic.
+Status: MVP COMPLETE — Slices 1–7 implemented and gated behind explicit
+user actions for every filesystem mutation (discovery, canonical store +
+import, one-way sync, Skill×Tool matrix, conflict management, optional
+auto-sync off by default, explicit git machine-sync). Beyond-MVP scope is
+listed in §8.
 
 ## 1. MVP Architecture Summary
 
