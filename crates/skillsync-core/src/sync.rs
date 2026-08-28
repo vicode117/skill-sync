@@ -55,6 +55,15 @@ pub enum PlanAction {
         target: Option<PathBuf>,
         reason: String,
     },
+    /// Skill is disabled for this tool and nothing is installed.
+    Disabled,
+    /// Skill disabled for this tool: remove the managed symlink only.
+    RemoveManagedLink { target: PathBuf },
+    /// Skill disabled for this tool: back up and remove the managed copy.
+    RemoveManagedCopy {
+        target: PathBuf,
+        backup_dir: PathBuf,
+    },
 }
 
 impl PlanAction {
@@ -67,6 +76,9 @@ impl PlanAction {
             PlanAction::NoChange { .. } => "noChange",
             PlanAction::Native => "native",
             PlanAction::Skip { .. } => "skip",
+            PlanAction::Disabled => "disabled",
+            PlanAction::RemoveManagedLink { .. } => "removeManagedLink",
+            PlanAction::RemoveManagedCopy { .. } => "removeManagedCopy",
         }
     }
 }
@@ -91,6 +103,8 @@ impl PlanEntry {
                 | PlanAction::CreateCopy { .. }
                 | PlanAction::UpdateCopy { .. }
                 | PlanAction::RepairLink { .. }
+                | PlanAction::RemoveManagedLink { .. }
+                | PlanAction::RemoveManagedCopy { .. }
         )
     }
 }
@@ -164,7 +178,7 @@ pub struct SyncContext<'a> {
 impl<'a> SyncContext<'a> {
     /// Resolve the configured method with adapter knowledge and a platform
     /// capability probe (§13 Auto, §44 Windows-style fallback).
-    fn effective_method(
+    pub fn effective_method(
         &self,
         adapter: &dyn ToolAdapter,
         notes: &mut Vec<String>,
@@ -248,7 +262,22 @@ pub fn plan_tool_sync(
             Some(dir) => {
                 let target = dir.join(&skill.id);
                 let action = if is_same_dir(dir, &canonical_root) {
-                    PlanAction::Native
+                    // Even natively-shared tools honor enablement: there is
+                    // simply nothing to install or remove.
+                    if ctx.config.is_skill_tool_enabled(&skill.id, adapter.id()) {
+                        PlanAction::Native
+                    } else {
+                        PlanAction::Disabled
+                    }
+                } else if !ctx.config.is_skill_tool_enabled(&skill.id, adapter.id()) {
+                    plan_removal(
+                        ctx,
+                        skill,
+                        adapter.id(),
+                        &canonical_root,
+                        &target,
+                        &registry,
+                    )
                 } else {
                     plan_for_target(ctx, skill, &canonical_root, &target, method, &registry)
                 };
@@ -281,6 +310,60 @@ pub fn plan_tool_sync(
         target_dir,
         entries,
     })
+}
+
+/// Classify the removal of a disabled skill's installation. Only managed
+/// installations are removed; unmanaged content is reported, never touched
+/// (§27, §30).
+fn plan_removal(
+    ctx: &SyncContext,
+    skill: &Skill,
+    tool_id: &str,
+    canonical_root: &Path,
+    target: &Path,
+    registry: &ManagedRegistry,
+) -> PlanAction {
+    let meta = match std::fs::symlink_metadata(target) {
+        Ok(m) => m,
+        Err(_) => return PlanAction::Disabled, // nothing installed
+    };
+
+    if meta.file_type().is_symlink() {
+        let managed = match target.canonicalize() {
+            Ok(resolved) => resolved.starts_with(canonical_root),
+            Err(_) => {
+                let raw = std::fs::read_link(target).unwrap_or_default();
+                raw == skill.root || raw.starts_with(canonical_root)
+            }
+        };
+        if managed {
+            return PlanAction::RemoveManagedLink {
+                target: target.to_path_buf(),
+            };
+        }
+        return PlanAction::Skip {
+            target: Some(target.to_path_buf()),
+            reason: "disabled, but the symlink is not managed by SkillSync".into(),
+        };
+    }
+
+    if meta.is_dir() {
+        if registry.find_by_target(target).is_some() {
+            return PlanAction::RemoveManagedCopy {
+                target: target.to_path_buf(),
+                backup_dir: backup_dir_for_copy(ctx.paths, tool_id, &skill.id),
+            };
+        }
+        return PlanAction::Skip {
+            target: Some(target.to_path_buf()),
+            reason: "disabled, but the target is an unmanaged directory (never deleted)".into(),
+        };
+    }
+
+    PlanAction::Skip {
+        target: Some(target.to_path_buf()),
+        reason: "disabled, but the target is not a managed installation".into(),
+    }
 }
 
 /// Classify one skill × target path. Read-only.
@@ -430,7 +513,77 @@ pub fn execute_sync(ctx: &SyncContext, plan: &SyncPlan, dry_run: bool) -> Result
         };
 
         match &entry.action {
-            PlanAction::NoChange { .. } | PlanAction::Native | PlanAction::Skip { .. } => continue,
+            PlanAction::NoChange { .. }
+            | PlanAction::Native
+            | PlanAction::Skip { .. }
+            | PlanAction::Disabled => continue,
+            PlanAction::RemoveManagedLink { target } => {
+                if dry_run {
+                    succeeded.push(outcome(true, None, None));
+                    continue;
+                }
+                // Re-verify ownership at execution time: the symlink must
+                // resolve into the canonical store before it is removed.
+                let canonical_root = &plan.canonical_root;
+                let owned = std::fs::symlink_metadata(target)
+                    .map(|m| m.file_type().is_symlink())
+                    .unwrap_or(false)
+                    && (target
+                        .canonicalize()
+                        .map(|r| r.starts_with(canonical_root))
+                        .unwrap_or(false)
+                        || std::fs::read_link(target)
+                            .map(|raw| raw.starts_with(canonical_root))
+                            .unwrap_or(false));
+                if !owned {
+                    failed.push(outcome(
+                        false,
+                        Some("link no longer resolves into the canonical store; refusing".into()),
+                        None,
+                    ));
+                    continue;
+                }
+                match std::fs::remove_file(target) {
+                    Ok(()) => succeeded.push(outcome(true, None, None)),
+                    Err(e) => failed.push(outcome(false, Some(e.to_string()), None)),
+                }
+            }
+            PlanAction::RemoveManagedCopy { target, backup_dir } => {
+                if dry_run {
+                    succeeded.push(outcome(true, None, Some(backup_dir.clone())));
+                    continue;
+                }
+                if registry.find_by_target(target).is_none() {
+                    failed.push(outcome(
+                        false,
+                        Some("managed record missing; refusing to remove".into()),
+                        None,
+                    ));
+                    continue;
+                }
+                let backup = match store::backup_skill_dir(
+                    target,
+                    backup_dir,
+                    &entry.skill_id,
+                    "disable",
+                    plan.tool_id.as_str(),
+                    ctx.env,
+                ) {
+                    Ok(()) => backup_dir.clone(),
+                    Err(e) => {
+                        failed.push(outcome(false, Some(e.message), None));
+                        continue;
+                    }
+                };
+                match remove_dir_verified(target, "managed copy (disabled)") {
+                    Ok(()) => {
+                        registry.remove_by_target(target);
+                        registry_dirty = true;
+                        succeeded.push(outcome(true, None, Some(backup)));
+                    }
+                    Err(e) => failed.push(outcome(false, Some(e.message), Some(backup))),
+                }
+            }
             PlanAction::CreateLink { target, source } => {
                 if dry_run {
                     succeeded.push(outcome(true, None, None));
@@ -928,5 +1081,168 @@ mod tests {
         assert!(plan.entries.is_empty());
         let report = execute_sync(&sb.ctx(), &plan, false).unwrap();
         assert_eq!(report.summary(), "0 succeeded, 0 failed");
+    }
+}
+
+#[cfg(test)]
+mod enablement_tests {
+    use super::*;
+    use crate::adapter::claude::ClaudeAdapter;
+    use crate::config::ToolOverride;
+    use crate::error::ErrorCode;
+    use crate::skill::{SkillScope, SkillSource};
+
+    const V1: &str = "---\nname: tdd\ndescription: v1\n---\n# v1\n";
+
+    fn write_skill(root: &Path, name: &str, body: &str) -> PathBuf {
+        let dir = root.join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("SKILL.md"), body).unwrap();
+        dir
+    }
+
+    /// Full sandbox mirroring the facade (needed for config persistence).
+    fn facade() -> (tempfile::TempDir, crate::SkillSync) {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut env = EnvContext::with_home(tmp.path().join("home"));
+        env.env.insert("PATH".into(), String::new());
+        let app = crate::SkillSync::with_environment(env);
+        (tmp, app)
+    }
+
+    #[test]
+    fn disabled_skill_without_installation_plans_disabled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut env = EnvContext::with_home(tmp.path().join("home"));
+        env.env.insert("PATH".into(), String::new());
+        let paths = AppPaths {
+            home: tmp.path().join("sync-home"),
+        };
+        let canonical = env.home.join(".agents").join("skills");
+        std::fs::create_dir_all(&canonical).unwrap();
+        write_skill(&canonical, "tdd", V1);
+        let mut config = Config {
+            canonical_skill_root: canonical.to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        config.set_skill_tool_enabled("tdd", "claude", false);
+        let ctx = SyncContext {
+            env: &env,
+            paths: &paths,
+            config: &config,
+        };
+        let skill = crate::scan::inspect_as_skill(
+            &env,
+            &canonical.join("tdd"),
+            SkillScope::Global,
+            SkillSource::Canonical,
+        )
+        .unwrap();
+
+        let plan = plan_tool_sync(&ctx, &ClaudeAdapter, &[skill]).unwrap();
+        assert!(matches!(plan.entries[0].action, PlanAction::Disabled));
+        assert_eq!(plan.mutation_count(), 0);
+    }
+
+    #[test]
+    fn disabling_removes_only_the_managed_link() {
+        let (_tmp, mut app) = facade();
+        let home = app.env().home.clone();
+        let canonical = home.join(".agents").join("skills");
+        write_skill(&canonical, "tdd", V1);
+        std::fs::create_dir_all(home.join(".claude")).unwrap();
+        app.save_config(Config::default()).unwrap();
+
+        // Install via sync (Slice 3 behavior).
+        let report = app.sync_tool("claude", false).unwrap();
+        assert_eq!(report.succeeded.len(), 1);
+        let link = home.join(".claude").join("skills").join("tdd");
+        assert!(link.exists());
+
+        // Disable: the managed link is removed, canonical stays.
+        let report = app
+            .set_skill_tool_enabled("tdd", "claude", false, false)
+            .unwrap();
+        assert_eq!(report.succeeded.len(), 1);
+        assert_eq!(report.succeeded[0].action_kind, "removeManagedLink");
+        assert!(!link.exists());
+        assert!(canonical.join("tdd").join("SKILL.md").is_file());
+
+        // Config records the choice.
+        assert!(!app.config().is_skill_tool_enabled("tdd", "claude"));
+        // Overview shows the disabled state.
+        let overview = app.overview().unwrap();
+        let row = &overview.rows[0];
+        let installation = row
+            .installations
+            .iter()
+            .find(|i| i.tool_id == "claude")
+            .unwrap();
+        assert_eq!(installation.state, crate::SyncState::Disabled);
+
+        // Re-enable: installs again.
+        let report = app
+            .set_skill_tool_enabled("tdd", "claude", true, false)
+            .unwrap();
+        assert_eq!(report.succeeded[0].action_kind, "createLink");
+        assert!(link.exists());
+    }
+
+    #[test]
+    fn disabling_never_touches_unmanaged_targets() {
+        let (_tmp, mut app) = facade();
+        let home = app.env().home.clone();
+        let canonical = home.join(".agents").join("skills");
+        write_skill(&canonical, "tdd", V1);
+        // User already has their own copy in the tool dir.
+        let tool_dir = home.join(".claude").join("skills");
+        write_skill(
+            &tool_dir,
+            "tdd",
+            "---\nname: tdd\ndescription: mine\n---\nmine",
+        );
+        std::fs::create_dir_all(home.join(".claude")).unwrap();
+        app.save_config(Config::default()).unwrap();
+
+        let report = app
+            .set_skill_tool_enabled("tdd", "claude", false, false)
+            .unwrap();
+        // A skip is reported in the plan, not executed: nothing changed.
+        assert!(report.succeeded.is_empty() && report.failed.is_empty());
+        // User content untouched.
+        assert!(tool_dir.join("tdd").join("SKILL.md").is_file());
+    }
+
+    #[test]
+    fn enablement_rejects_unknown_skill_and_tool() {
+        let (_tmp, mut app) = facade();
+        let canonical = app.env().home.join(".agents").join("skills");
+        write_skill(&canonical, "tdd", V1);
+        app.save_config(Config::default()).unwrap();
+
+        let err = app
+            .set_skill_tool_enabled("nope", "claude", true, false)
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidSkill);
+        let err = app
+            .set_skill_tool_enabled("tdd", "not-a-tool", true, false)
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::ToolNotFound);
+    }
+
+    #[test]
+    fn config_records_and_persists_enablement() {
+        let (_tmp, mut app) = facade();
+        app.save_config(Config::default()).unwrap();
+        assert!(app.config().is_skill_tool_enabled("x", "claude"));
+        let mut config = app.config().clone();
+        config.set_skill_tool_enabled("x", "claude", false);
+        app.save_config(config).unwrap();
+        assert!(!app.config().is_skill_tool_enabled("x", "claude"));
+        let reloaded = crate::config::load_config(app.paths()).unwrap();
+        assert!(!reloaded.is_skill_tool_enabled("x", "claude"));
+        // Other combos keep the enabled default.
+        assert!(reloaded.is_skill_tool_enabled("x", "codex"));
+        let _ = ToolOverride::default();
     }
 }

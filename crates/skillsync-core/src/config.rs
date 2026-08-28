@@ -44,6 +44,16 @@ pub struct RepositoryConfig {
     pub auto_sync: bool,
 }
 
+/// Per Skill×Tool settings (design doc §25/§27): a missing entry means
+/// enabled. Stored under `skills.<skillId>` in the config.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SkillToolPrefs {
+    pub tools: BTreeMap<String, bool>,
+    /// Tool ids whose unmanaged conflicts the user chose to Ignore (§18).
+    pub ignore_conflicts: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Config {
@@ -51,6 +61,8 @@ pub struct Config {
     pub canonical_skill_root: String,
     pub sync_method: SyncMethod,
     pub tools: BTreeMap<String, ToolOverride>,
+    /// Skill×Tool enablement matrix.
+    pub skills: BTreeMap<String, SkillToolPrefs>,
     pub repositories: Vec<RepositoryConfig>,
     /// Optional automatic synchronization toggle (Slice 6). Off by default.
     pub auto_sync: bool,
@@ -62,6 +74,7 @@ impl Default for Config {
             canonical_skill_root: "~/.agents/skills".to_string(),
             sync_method: SyncMethod::Auto,
             tools: BTreeMap::new(),
+            skills: BTreeMap::new(),
             repositories: Vec::new(),
             auto_sync: false,
         }
@@ -80,6 +93,41 @@ impl Config {
 
     pub fn is_tool_enabled(&self, tool_id: &str) -> bool {
         self.tool(tool_id).and_then(|t| t.enabled).unwrap_or(true)
+    }
+
+    /// Whether a skill is enabled for a tool (default: enabled).
+    pub fn is_skill_tool_enabled(&self, skill_id: &str, tool_id: &str) -> bool {
+        self.skills
+            .get(skill_id)
+            .and_then(|s| s.tools.get(tool_id))
+            .copied()
+            .unwrap_or(true)
+    }
+
+    /// Record a Skill×Tool enablement choice.
+    pub fn set_skill_tool_enabled(&mut self, skill_id: &str, tool_id: &str, enabled: bool) {
+        let prefs = self.skills.entry(skill_id.to_string()).or_default();
+        prefs.tools.insert(tool_id.to_string(), enabled);
+    }
+
+    /// Whether the user chose to Ignore conflicts for this skill × tool.
+    pub fn is_conflict_ignored(&self, skill_id: &str, tool_id: &str) -> bool {
+        self.skills
+            .get(skill_id)
+            .map(|s| s.ignore_conflicts.iter().any(|t| t == tool_id))
+            .unwrap_or(false)
+    }
+
+    /// Record (or clear) an Ignore choice for a skill × tool conflict.
+    pub fn set_conflict_ignored(&mut self, skill_id: &str, tool_id: &str, ignored: bool) {
+        let prefs = self.skills.entry(skill_id.to_string()).or_default();
+        if ignored {
+            if !prefs.ignore_conflicts.iter().any(|t| t == tool_id) {
+                prefs.ignore_conflicts.push(tool_id.to_string());
+            }
+        } else {
+            prefs.ignore_conflicts.retain(|t| t != tool_id);
+        }
     }
 }
 

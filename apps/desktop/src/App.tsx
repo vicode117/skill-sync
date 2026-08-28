@@ -20,6 +20,7 @@ export default function App() {
   const [page, setPage] = useState<PageId>("skills");
   const { overview, error, loading, refresh } = useOverview();
   const [busyTool, setBusyTool] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const handleToggleTool = useCallback(
     async (toolId: string, enabled: boolean) => {
@@ -36,6 +37,19 @@ export default function App() {
         await refresh();
       } finally {
         setBusyTool(null);
+      }
+    },
+    [refresh],
+  );
+
+  const handleToggleSkillTool = useCallback(
+    async (skillId: string, toolId: string, enabled: boolean) => {
+      setToggling(`${skillId}:${toolId}`);
+      try {
+        await api.setSkillToolEnabled(skillId, toolId, enabled, false);
+        await refresh();
+      } finally {
+        setToggling(null);
       }
     },
     [refresh],
@@ -82,7 +96,13 @@ export default function App() {
           </div>
         ) : null}
         {page === "skills" && (
-          <SkillsPage overview={overview} loading={loading} onRefresh={() => void refresh()} />
+          <SkillsPage
+            overview={overview}
+            loading={loading}
+            onRefresh={() => void refresh()}
+            onToggleSkillTool={handleToggleSkillTool}
+            toggling={toggling}
+          />
         )}
         {page === "tools" && (
           <ToolsPage

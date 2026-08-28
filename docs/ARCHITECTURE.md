@@ -192,10 +192,42 @@ Vitest + Testing Library (dev).
   record; updates back up the old copy first (§31).
 - Reports exactly what succeeded and failed (§59); exit code 1 on failures.
 
+## 7d. Slice 4: Multi-Tool Sync & Skill×Tool Matrix (implemented)
+
+- Enablement matrix (§25/§27): `config.skills.<skillId>.tools.<toolId>`
+  (missing = enabled). `skillsync enable|disable <skill> --tool <id>
+  [--dry-run]` and clickable matrix chips in the GUI persist the choice
+  and apply it: enabling installs that one installation; disabling removes
+  ONLY the managed one (registry/link-ownership re-verified at execution;
+  unmanaged content is reported and never deleted).
+- The overview matrix shows `Disabled` states, derived from the same config.
+- `skillsync sync --all [--dry-run]`: one plan + report per detected,
+  enabled tool; failures are reported per tool (§59).
+- Native-canonical tools honor enablement as a no-op (nothing to install).
+
+## 7e. Slice 5: Conflict Management & Compare (implemented)
+
+- Detection (§18/§21): canonical skill + unmanaged same-name directory with
+  differing fingerprints = conflict. Identical copies stay import
+  candidates, never conflicts. Managed-copy drift is an `updateCopy` plan
+  action, not a conflict.
+- Compare (§55): directory-aware diff — added/removed/modified files, with
+  line-level text diffs for UTF-8 files (size-capped); binaries report
+  without a text diff. `skillsync diff <skill> --tool <id>` / GUI Compare.
+- Resolutions (§54), explicit only, backups always: `use-canonical`
+  (target backed up, canonical installed as link/copy), `import-target`
+  (canonical backed up and replaced by the target content, then the target
+  becomes managed), `keep-both` (target imported under `<name>-2`; nothing
+  replaced), and `ignore` (recorded per skill×tool; detect/resolve refuse
+  until unignored). Managed targets are refused — sync handles those.
+- `skillsync conflicts [--json]`, `skillsync resolve … [--dry-run]
+  [--ignore]` / GUI Conflicts section above the skill list.
+
 ## 8. Later Slices (not implemented in this pass)
 
 ~~2 Canonical store + import/fingerprint~~ (done, §7b) ·
-~~3 one-way sync~~ (done, §7c) → 4 multi-tool + Skill×Tool matrix
-enablement → 5 conflict management + compare → 6 automatic sync (watcher,
-debounced, copy-target refresh only) → 7 explicit git integration.
-Each slice lands only after the previous one is working and tested.
+~~3 one-way sync~~ (done, §7c) · ~~4 multi-tool + Skill×Tool matrix~~
+(done, §7d) · ~~5 conflict management + compare~~ (done, §7e) → 6 automatic
+sync (watcher, debounced, copy-target refresh only; off by default) →
+7 explicit git integration. Each slice lands only after the previous one is
+working and tested.

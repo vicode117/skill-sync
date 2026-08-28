@@ -92,10 +92,22 @@ function makeOverview(): SkillOverview {
 }
 
 describe("SkillsPage", () => {
-  it("renders all discovered skills with status and source", () => {
-    render(
-      <SkillsPage overview={makeOverview()} loading={false} onRefresh={() => {}} />,
+  const onToggleSkillTool = vi.fn().mockResolvedValue(undefined);
+
+  function renderPage() {
+    return render(
+      <SkillsPage
+        overview={makeOverview()}
+        loading={false}
+        onRefresh={() => {}}
+        onToggleSkillTool={onToggleSkillTool}
+        toggling={null}
+      />,
     );
+  }
+
+  it("renders all discovered skills with status and source", () => {
+    renderPage();
     expect(screen.getByText("git-commit")).toBeInTheDocument();
     expect(screen.getByText("legacy-tool")).toBeInTheDocument();
     expect(screen.getByText("~/.agents/skills/git-commit")).toBeInTheDocument();
@@ -104,9 +116,7 @@ describe("SkillsPage", () => {
 
   it("filters by search query", async () => {
     const user = userEvent.setup();
-    render(
-      <SkillsPage overview={makeOverview()} loading={false} onRefresh={() => {}} />,
-    );
+    renderPage();
     await user.type(screen.getByLabelText("Search skills"), "legacy");
     expect(screen.getByText("legacy-tool")).toBeInTheDocument();
     expect(screen.queryByText("git-commit")).not.toBeInTheDocument();
@@ -114,9 +124,7 @@ describe("SkillsPage", () => {
 
   it("filters by status chip", async () => {
     const user = userEvent.setup();
-    render(
-      <SkillsPage overview={makeOverview()} loading={false} onRefresh={() => {}} />,
-    );
+    renderPage();
     await user.click(screen.getByRole("button", { name: "Synced" }));
     expect(screen.getByText("git-commit")).toBeInTheDocument();
     expect(screen.queryByText("legacy-tool")).not.toBeInTheDocument();
@@ -124,21 +132,29 @@ describe("SkillsPage", () => {
 
   it("filters by tool chip", async () => {
     const user = userEvent.setup();
-    render(
-      <SkillsPage overview={makeOverview()} loading={false} onRefresh={() => {}} />,
-    );
+    renderPage();
     await user.click(screen.getByRole("button", { name: "Codex" }));
     expect(screen.getByText("legacy-tool")).toBeInTheDocument();
     expect(screen.queryByText("git-commit")).not.toBeInTheDocument();
   });
 
   it("shows validation warnings on cards", () => {
-    render(
-      <SkillsPage overview={makeOverview()} loading={false} onRefresh={() => {}} />,
-    );
+    renderPage();
     const cards = screen.getAllByTestId("skill-card");
     const legacyCard = cards.find((el) => within(el).queryByText("legacy-tool") !== null);
     expect(legacyCard).toBeDefined();
     expect(within(legacyCard!).getByText(/no description/)).toBeInTheDocument();
+  });
+
+  it("toggles a Skill×Tool combination from the matrix chip", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    // git-commit is synced with Claude: clicking that card's chip disables it.
+    const cards = screen.getAllByTestId("skill-card");
+    const gitCard = cards.find((el) => within(el).queryByText("git-commit") !== null);
+    expect(gitCard).toBeDefined();
+    const claudeChip = within(gitCard!).getByRole("button", { name: /Claude/ });
+    await user.click(claudeChip);
+    expect(onToggleSkillTool).toHaveBeenCalledWith("git-commit", "claude", false);
   });
 });

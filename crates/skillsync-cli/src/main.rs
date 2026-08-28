@@ -34,14 +34,67 @@ enum Commands {
     Doctor,
     /// Create the canonical skill root folder if it does not exist yet.
     AdoptRoot,
-    /// Sync canonical skills into one tool's skill directory (one-way).
+    /// Sync canonical skills into tool directories (one-way).
     Sync {
-        /// Tool to sync into (see `skillsync tools`).
-        #[arg(long)]
-        tool: String,
+        /// Tool to sync into; omit with --all.
+        #[arg(long, group = "target")]
+        tool: Option<String>,
+        /// Sync every detected, enabled tool.
+        #[arg(long, group = "target")]
+        all: bool,
         /// Preview the plan without writing anything.
         #[arg(long)]
         dry_run: bool,
+    },
+    /// Enable a canonical skill for one tool (installs it).
+    Enable {
+        /// Canonical skill directory name.
+        skill: String,
+        /// Tool to enable (see `skillsync tools`).
+        #[arg(long)]
+        tool: String,
+        /// Preview without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Disable a canonical skill for one tool (removes only the managed
+    /// installation; unmanaged files are never deleted).
+    Disable {
+        /// Canonical skill directory name.
+        skill: String,
+        /// Tool to disable (see `skillsync tools`).
+        #[arg(long)]
+        tool: String,
+        /// Preview without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// List canonical vs unmanaged-target conflicts.
+    Conflicts,
+    /// Directory-aware diff between a canonical skill and a tool target.
+    Diff {
+        /// Canonical skill directory name.
+        skill: String,
+        /// Tool whose installation to compare.
+        #[arg(long)]
+        tool: String,
+    },
+    /// Resolve a conflict (never without a backup; explicit choice only).
+    Resolve {
+        /// Canonical skill directory name.
+        skill: String,
+        /// Tool whose conflicting target to resolve.
+        #[arg(long)]
+        tool: String,
+        /// Resolution: use-canonical | import-target | keep-both.
+        #[arg(long)]
+        resolution: String,
+        /// Preview without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+        /// Silence this conflict without changing anything.
+        #[arg(long)]
+        ignore: bool,
     },
     /// Import a skill directory into the canonical store.
     Import {
@@ -65,7 +118,7 @@ fn main() {
 }
 
 fn run(cli: Cli) -> i32 {
-    let app = match SkillSync::discover() {
+    let mut app = match SkillSync::discover() {
         Ok(app) => app,
         Err(err) => return report_error(&err),
     };
@@ -76,7 +129,43 @@ fn run(cli: Cli) -> i32 {
         Commands::Scan => cmd_scan(&app, cli.json),
         Commands::Doctor => cmd_doctor(&app, cli.json),
         Commands::AdoptRoot => cmd_adopt_root(&app, cli.json),
-        Commands::Sync { tool, dry_run } => cmd_sync(&app, &tool, dry_run, cli.json),
+        Commands::Sync { tool, all, dry_run } => {
+            if all {
+                cmd_sync_all(&app, dry_run, cli.json)
+            } else if let Some(tool) = tool {
+                cmd_sync(&app, &tool, dry_run, cli.json)
+            } else {
+                eprintln!("error: specify --tool <id> or --all");
+                Ok(2)
+            }
+        }
+        Commands::Conflicts => cmd_conflicts(&app, cli.json),
+        Commands::Diff { skill, tool } => cmd_diff(&app, &skill, &tool, cli.json),
+        Commands::Resolve {
+            skill,
+            tool,
+            resolution,
+            dry_run,
+            ignore,
+        } => cmd_resolve(
+            &mut app,
+            &skill,
+            &tool,
+            &resolution,
+            dry_run,
+            ignore,
+            cli.json,
+        ),
+        Commands::Enable {
+            skill,
+            tool,
+            dry_run,
+        } => cmd_set_enabled(&mut app, &skill, &tool, true, dry_run, cli.json),
+        Commands::Disable {
+            skill,
+            tool,
+            dry_run,
+        } => cmd_set_enabled(&mut app, &skill, &tool, false, dry_run, cli.json),
         Commands::Import {
             path,
             dry_run,
@@ -84,11 +173,11 @@ fn run(cli: Cli) -> i32 {
             replace,
         } => {
             let resolution = if keep_both {
-                skillsync_core::ConflictResolution::KeepBoth
+                skillsync_core::ImportResolution::KeepBoth
             } else if replace {
-                skillsync_core::ConflictResolution::Replace
+                skillsync_core::ImportResolution::Replace
             } else {
-                skillsync_core::ConflictResolution::Skip
+                skillsync_core::ImportResolution::Skip
             };
             cmd_import(&app, &path, resolution, dry_run, cli.json)
         }
@@ -321,6 +410,162 @@ fn print_json<T: serde::Serialize>(value: &T) -> skillsync_core::Result<i32> {
     Ok(0)
 }
 
+fn cmd_sync_all(app: &SkillSync, dry_run: bool, json: bool) -> skillsync_core::Result<i32> {
+    let reports = app.sync_all(dry_run)?;
+    if json {
+        return print_json(&reports);
+    }
+    let mut failures = 0;
+    for report in &reports {
+        println!("Sync {} — {}", report.tool_id, report.summary());
+        failures += report.failed.len();
+    }
+    if reports.is_empty() {
+        println!("No detected, enabled tools to sync.");
+    }
+    Ok(if failures == 0 { 0 } else { 1 })
+}
+
+fn cmd_set_enabled(
+    app: &mut SkillSync,
+    skill: &str,
+    tool: &str,
+    enabled: bool,
+    dry_run: bool,
+    json: bool,
+) -> skillsync_core::Result<i32> {
+    let report = app.set_skill_tool_enabled(skill, tool, enabled, dry_run)?;
+    if json {
+        return print_json(&report);
+    }
+    if dry_run {
+        println!("DRY RUN — no changes made.");
+    }
+    for outcome in report.succeeded.iter().chain(report.failed.iter()) {
+        let verb = if enabled { "enable" } else { "disable" };
+        println!(
+            "{}: {} {} {}",
+            skill,
+            verb,
+            outcome.action_kind,
+            if outcome.ok { "ok" } else { "FAILED" }
+        );
+    }
+    if report.failed.is_empty() && report.succeeded.is_empty() {
+        println!(
+            "{skill} is already {} for {tool} (nothing to change)",
+            if enabled { "enabled" } else { "disabled" }
+        );
+    }
+    Ok(if report.failed.is_empty() { 0 } else { 1 })
+}
+
+fn cmd_conflicts(app: &SkillSync, json: bool) -> skillsync_core::Result<i32> {
+    let conflicts = app.conflicts()?;
+    let active: Vec<_> = conflicts.iter().filter(|c| !c.ignored).collect();
+    if json {
+        return print_json(&conflicts);
+    }
+    if active.is_empty() {
+        println!("No conflicts.");
+        return Ok(0);
+    }
+    println!(
+        "{:<22} {:<10} {:<28} {:<28} STATUS",
+        "SKILL", "TOOL", "CANONICAL", "TARGET"
+    );
+    for c in &active {
+        println!(
+            "{:<22} {:<10} {:<28} {:<28} CONFLICT",
+            c.skill_name, c.tool_id, c.canonical_display, c.target_display
+        );
+    }
+    println!(
+        "\n{} conflict(s). Resolve with: skillsync resolve <skill> --tool <id> \\\n  --resolution use-canonical|import-target|keep-both [--dry-run]",
+        active.len()
+    );
+    Ok(0)
+}
+
+fn cmd_diff(app: &SkillSync, skill: &str, tool: &str, json: bool) -> skillsync_core::Result<i32> {
+    let diff = app.diff_skill_tool(skill, tool)?;
+    if json {
+        return print_json(&diff);
+    }
+    if diff.is_empty() {
+        println!("No differences.");
+        return Ok(0);
+    }
+    for entry in &diff {
+        println!(
+            "{:<10} {}",
+            entry.kind.kind_label().to_uppercase(),
+            entry.relative_path
+        );
+        if let Some(text) = &entry.text_diff {
+            for line in text.lines() {
+                println!("    {line}");
+            }
+        }
+    }
+    Ok(0)
+}
+
+fn cmd_resolve(
+    app: &mut SkillSync,
+    skill: &str,
+    tool: &str,
+    resolution: &str,
+    dry_run: bool,
+    ignore: bool,
+    json: bool,
+) -> skillsync_core::Result<i32> {
+    if ignore {
+        let mut config = app.config().clone();
+        config.set_conflict_ignored(skill, tool, true);
+        app.save_config(config)?;
+        if !json {
+            println!("{skill} × {tool} conflicts will be ignored.");
+        } else {
+            print_json(&serde_json::json!({ "ignored": true }))?;
+        }
+        return Ok(0);
+    }
+    let resolution = match resolution {
+        "use-canonical" => skillsync_core::Resolution::UseCanonical,
+        "import-target" => skillsync_core::Resolution::ImportTarget,
+        "keep-both" => skillsync_core::Resolution::KeepBoth,
+        other => {
+            eprintln!(
+                "error: unknown resolution `{other}`; use use-canonical, import-target or keep-both"
+            );
+            return Ok(2);
+        }
+    };
+    let report = app.resolve_conflict(skill, tool, resolution, dry_run)?;
+    if json {
+        return print_json(&report);
+    }
+    if dry_run {
+        println!("DRY RUN — no changes made.");
+    }
+    for note in &report.notes {
+        println!("  note: {note}");
+    }
+    for backup in &report.backups {
+        println!("  backup: {}", backup.display());
+    }
+    println!(
+        "Resolved {skill} × {tool}: {}",
+        match report.resolution {
+            skillsync_core::Resolution::UseCanonical => "canonical version installed",
+            skillsync_core::Resolution::ImportTarget => "target version imported",
+            skillsync_core::Resolution::KeepBoth => "imported under a new name",
+        }
+    );
+    Ok(0)
+}
+
 fn cmd_sync(
     app: &SkillSync,
     tool_id: &str,
@@ -398,7 +643,7 @@ fn cmd_adopt_root(app: &SkillSync, json: bool) -> skillsync_core::Result<i32> {
 fn cmd_import(
     app: &SkillSync,
     path: &str,
-    resolution: skillsync_core::ConflictResolution,
+    resolution: skillsync_core::ImportResolution,
     dry_run: bool,
     json: bool,
 ) -> skillsync_core::Result<i32> {

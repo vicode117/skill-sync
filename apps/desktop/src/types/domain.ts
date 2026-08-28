@@ -236,3 +236,38 @@ export const STATUS_MARKS: Record<SyncState, string> = {
   unmanaged: "u",
   unavailable: "×",
 };
+
+/** Conflict between a canonical skill and an unmanaged target (§18). */
+export interface ConflictReport {
+  skillId: string;
+  skillName: string;
+  toolId: string;
+  toolDisplayName: string;
+  canonicalPath: string;
+  canonicalDisplay: string;
+  targetPath: string;
+  targetDisplay: string;
+  canonicalFingerprint?: string;
+  targetFingerprint?: string;
+  ignored: boolean;
+}
+
+export type DiffKind = "added" | "removed" | "modified";
+
+export interface DiffEntry {
+  relativePath: string;
+  kind: DiffKind;
+  textDiff?: string;
+}
+
+export type Resolution = "useCanonical" | "importTarget" | "keepBoth";
+
+export interface ResolutionReport {
+  skillId: string;
+  toolId: string;
+  resolution: Resolution;
+  dryRun: boolean;
+  backups: string[];
+  installed: boolean;
+  notes: string[];
+}

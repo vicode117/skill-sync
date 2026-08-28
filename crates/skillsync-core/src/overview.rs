@@ -396,13 +396,18 @@ impl<'a> OverviewBuilder<'a> {
                     continue;
                 }
                 if !row.installations.iter().any(|i| i.tool_id == tool.id) {
+                    let enabled = self.config.is_skill_tool_enabled(&row.key, &tool.id);
                     row.installations.push(Installation {
                         tool_id: tool.id.clone(),
                         tool_display_name: tool.display_name.clone(),
                         path: PathBuf::new(),
                         display_path: String::new(),
-                        state: SyncState::NotInstalled,
-                        managedness: Managedness::Unmanaged, // placeholder; state is NotInstalled
+                        state: if enabled {
+                            SyncState::NotInstalled
+                        } else {
+                            SyncState::Disabled
+                        },
+                        managedness: Managedness::Unmanaged, // placeholder; see state
                         fingerprint: None,
                         validation: Vec::new(),
                     });

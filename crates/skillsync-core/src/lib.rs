@@ -7,6 +7,7 @@
 
 pub mod adapter;
 pub mod config;
+pub mod conflict;
 pub mod doctor;
 pub mod env;
 pub mod error;
@@ -23,6 +24,7 @@ pub mod sync;
 use std::sync::Arc;
 
 pub use config::{AppPaths, Config, SyncMethod, ToolOverride};
+pub use conflict::{ConflictReport, DiffEntry, DiffKind, Resolution, ResolutionReport};
 pub use doctor::{CheckStatus, DoctorCheck, DoctorReport};
 pub use env::EnvContext;
 pub use error::{ErrorCode, Result, SkillSyncError};
@@ -35,8 +37,8 @@ pub use skill::{
     ValidationSeverity,
 };
 pub use store::{
-    adopt_canonical_root as adopt_canonical_root_op, ConflictResolution, ImportAction,
-    ImportOutcome, ImportPlan,
+    adopt_canonical_root as adopt_canonical_root_op, ConflictResolution as ImportResolution,
+    ImportAction, ImportOutcome, ImportPlan,
 };
 pub use sync::{EffectiveMethod, EntryOutcome, PlanAction, PlanEntry, SyncPlan, SyncRunReport};
 
@@ -249,6 +251,199 @@ impl SkillSync {
     /// Plan and execute a sync (dry-run capable).
     pub fn sync_tool(&self, tool_id: &str, dry_run: bool) -> Result<SyncRunReport> {
         let plan = self.plan_sync(tool_id)?;
+        sync::execute_sync(&self.sync_context(), &plan, dry_run)
+    }
+
+    /// Sync every detected, enabled tool (§75 Slice 4 multi-tool sync).
+    /// Each tool gets its own plan and report; one tool's failure does not
+    /// stop the others.
+    pub fn sync_all(&self, dry_run: bool) -> Result<Vec<SyncRunReport>> {
+        let mut reports = Vec::new();
+        for adapter in &self.adapters {
+            let id = adapter.id();
+            if !self.config.is_tool_enabled(id) || !adapter.detect(&self.env).installed {
+                continue;
+            }
+            reports.push(self.sync_tool(id, dry_run)?);
+        }
+        Ok(reports)
+    }
+
+    /// Detect canonical ⇄ unmanaged-target conflicts (§18). Read-only.
+    pub fn conflicts(&self) -> Result<Vec<ConflictReport>> {
+        let canonical_skills = self.canonical_skills()?;
+        let scanned = self.scan_all()?;
+        let tool_names: Vec<(String, String)> = self
+            .adapters
+            .iter()
+            .map(|a| (a.id().to_string(), a.display_name().to_string()))
+            .collect();
+        Ok(conflict::detect_conflicts(
+            &self.env,
+            &self.config,
+            &canonical_skills,
+            &scanned,
+            &tool_names,
+        ))
+    }
+
+    /// Directory-aware diff between a canonical skill and a tool's
+    /// unmanaged target (§55). Read-only.
+    pub fn diff_skill_tool(&self, skill_id: &str, tool_id: &str) -> Result<Vec<DiffEntry>> {
+        let canonical_root = {
+            let canonical_skills = self.canonical_skills()?;
+            canonical_skills
+                .iter()
+                .find(|s| s.id == skill_id)
+                .ok_or_else(|| {
+                    SkillSyncError::new(
+                        ErrorCode::InvalidSkill,
+                        format!("`{skill_id}` is not in the canonical store"),
+                    )
+                    .with_skill(skill_id)
+                    .recoverable()
+                })?
+                .root
+                .clone()
+        };
+        let canonical_root_resolved = canonical_root
+            .canonicalize()
+            .unwrap_or_else(|_| canonical_root.clone());
+        let over = self.config.tool(tool_id).cloned().unwrap_or_default();
+        let adapter = self
+            .adapters
+            .iter()
+            .find(|a| a.id() == tool_id)
+            .ok_or_else(|| {
+                SkillSyncError::new(
+                    ErrorCode::ToolNotFound,
+                    format!("no adapter for `{tool_id}`"),
+                )
+                .with_tool(tool_id)
+            })?;
+        for location in adapter.global_skill_locations(&self.env, &over) {
+            if location.kind == crate::adapter::LocationKind::AgentStandard && !location.overridden
+            {
+                continue; // that is the canonical store itself
+            }
+            let target = location.path.join(skill_id);
+            if target.is_dir() {
+                return conflict::diff_skill_dirs(&canonical_root_resolved, &target);
+            }
+        }
+        Err(SkillSyncError::new(
+            ErrorCode::TargetConflict,
+            format!("no installation of `{skill_id}` found for `{tool_id}`"),
+        )
+        .with_skill(skill_id)
+        .with_tool(tool_id)
+        .recoverable())
+    }
+
+    /// Resolve a conflict (§18). Never destructive without a backup; the
+    /// target must still be unmanaged at resolution time.
+    pub fn resolve_conflict(
+        &mut self,
+        skill_id: &str,
+        tool_id: &str,
+        resolution: Resolution,
+        dry_run: bool,
+    ) -> Result<ResolutionReport> {
+        let conflicts = self.conflicts()?;
+        let report = conflicts
+            .iter()
+            .find(|c| c.skill_id == skill_id && c.tool_id == tool_id && !c.ignored)
+            .ok_or_else(|| {
+                SkillSyncError::new(
+                    ErrorCode::TargetConflict,
+                    format!("no active conflict for `{skill_id}` × `{tool_id}`"),
+                )
+                .with_skill(skill_id)
+                .with_tool(tool_id)
+                .recoverable()
+            })?
+            .clone();
+        let canonical = self
+            .canonical_skills()?
+            .into_iter()
+            .find(|s| s.id == skill_id)
+            .ok_or_else(|| {
+                SkillSyncError::new(ErrorCode::InvalidSkill, "canonical skill vanished")
+                    .with_skill(skill_id)
+            })?;
+        let adapter = self
+            .adapters
+            .iter()
+            .find(|a| a.id() == tool_id)
+            .ok_or_else(|| {
+                SkillSyncError::new(
+                    ErrorCode::ToolNotFound,
+                    format!("no adapter for `{tool_id}`"),
+                )
+                .with_tool(tool_id)
+            })?
+            .clone();
+        let ctx = self.sync_context();
+        let method = ctx.effective_method(adapter.as_ref(), &mut Vec::new());
+        let mut registry = crate::managed::ManagedRegistry::load(&self.env, &self.paths);
+        let result = conflict::resolve_conflict(
+            &ctx,
+            &report,
+            &canonical,
+            resolution,
+            method,
+            &mut registry,
+            dry_run,
+        );
+        if result.is_ok() && !dry_run {
+            registry.save(&self.paths)?;
+        }
+        result
+    }
+
+    /// Set a Skill×Tool enablement choice and apply it: enabling installs
+    /// that one installation, disabling removes only the managed one (§27).
+    pub fn set_skill_tool_enabled(
+        &mut self,
+        skill_id: &str,
+        tool_id: &str,
+        enabled: bool,
+        dry_run: bool,
+    ) -> Result<SyncRunReport> {
+        // Validate the tool first.
+        if !self.adapters.iter().any(|a| a.id() == tool_id) {
+            return Err(SkillSyncError::new(
+                ErrorCode::ToolNotFound,
+                format!("no adapter for tool `{tool_id}`"),
+            )
+            .with_tool(tool_id));
+        }
+        // Validate the canonical skill exists.
+        let canonical_skills = self.canonical_skills()?;
+        if !canonical_skills.iter().any(|s| s.id == skill_id) {
+            return Err(SkillSyncError::new(
+                ErrorCode::InvalidSkill,
+                format!("`{skill_id}` is not in the canonical store"),
+            )
+            .with_skill(skill_id)
+            .recoverable());
+        }
+
+        // Persist the desired state (SkillSync-owned config only).
+        let mut config = self.config.clone();
+        config.set_skill_tool_enabled(skill_id, tool_id, enabled);
+        self.save_config(config)?;
+
+        // Plan under the new config, then execute only this skill's entry.
+        let mut plan = self.plan_sync(tool_id)?;
+        plan.entries.retain(|e| e.skill_id == skill_id);
+        if plan.entries.is_empty() {
+            return Err(SkillSyncError::new(
+                ErrorCode::InvalidSkill,
+                format!("plan produced no entry for `{skill_id}`"),
+            )
+            .with_skill(skill_id));
+        }
         sync::execute_sync(&self.sync_context(), &plan, dry_run)
     }
 }

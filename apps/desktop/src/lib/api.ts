@@ -1,12 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Config,
+  ConflictReport,
+  DiffEntry,
   DoctorReport,
   ImportOutcome,
   ImportPlan,
   ImportResolution,
   SkillOverview,
   SkillSyncError,
+  Resolution,
+  ResolutionReport,
   SyncPlan,
   SyncRunReport,
 } from "@/types/domain";
@@ -43,6 +47,26 @@ export const api = {
   planSync: (toolId: string): Promise<SyncPlan> => invoke("plan_sync", { toolId }),
   syncTool: (toolId: string, dryRun = false): Promise<SyncRunReport> =>
     invoke("sync_tool", { toolId, dryRun }),
+  syncAll: (dryRun = false): Promise<SyncRunReport[]> => invoke("sync_all", { dryRun }),
+  setSkillToolEnabled: (
+    skillId: string,
+    toolId: string,
+    enabled: boolean,
+    dryRun = false,
+  ): Promise<SyncRunReport> =>
+    invoke("set_skill_tool_enabled", { skillId, toolId, enabled, dryRun }),
+  listConflicts: (): Promise<ConflictReport[]> => invoke("list_conflicts"),
+  diffSkill: (skillId: string, toolId: string): Promise<DiffEntry[]> =>
+    invoke("diff_skill", { skillId, toolId }),
+  resolveConflict: (
+    skillId: string,
+    toolId: string,
+    resolution: Resolution,
+    dryRun = false,
+  ): Promise<ResolutionReport> =>
+    invoke("resolve_conflict", { skillId, toolId, resolution, dryRun }),
+  setConflictIgnored: (skillId: string, toolId: string, ignored: boolean): Promise<Config> =>
+    invoke("set_conflict_ignored", { skillId, toolId, ignored }),
 };
 
 export type Api = typeof api;

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ImportControl } from "./ImportControl";
+import { ConflictsSection } from "./ConflictsSection";
 import type { SkillRow, SkillOverview, SyncState, ValidationIssue } from "@/types/domain";
 import { STATUS_LABELS, STATUS_MARKS } from "@/types/domain";
 
@@ -44,10 +45,14 @@ export function SkillsPage({
   overview,
   loading,
   onRefresh,
+  onToggleSkillTool,
+  toggling,
 }: {
   overview: SkillOverview | null;
   loading: boolean;
   onRefresh: () => void;
+  onToggleSkillTool: (skillId: string, toolId: string, enabled: boolean) => Promise<void>;
+  toggling: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -76,6 +81,7 @@ export function SkillsPage({
 
   return (
     <section aria-label="Skills" className="space-y-4">
+      <ConflictsSection onResolved={() => void onRefresh()} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Skills</h1>
@@ -159,6 +165,8 @@ export function SkillsPage({
               row={row}
               tools={overview?.tools ?? []}
               onImported={() => void onRefresh()}
+              onToggleTool={(toolId, enabled) => onToggleSkillTool(row.key, toolId, enabled)}
+              toggling={toggling}
             />
           ))}
         </ul>
@@ -171,10 +179,14 @@ function SkillCard({
   row,
   tools,
   onImported,
+  onToggleTool,
+  toggling,
 }: {
   row: SkillRow;
   tools: SkillOverview["tools"];
   onImported: () => void;
+  onToggleTool: (toolId: string, enabled: boolean) => Promise<void>;
+  toggling: string | null;
 }) {
   const importableSource = row.canonical
     ? null
@@ -196,12 +208,26 @@ function SkillCard({
         <div className="flex flex-wrap gap-1.5" aria-label="Tool matrix">
           {tools.map((tool) => {
             const installation = row.installations.find((i) => i.toolId === tool.id);
+            const state = installation?.state;
+            // Canonical rows can be toggled per Skill×Tool (§25). Clicking
+            // enables/disables sync for that combination; the toggle only
+            // ever adds or removes the SkillSync-managed installation.
+            const toggleable =
+              row.canonical !== undefined && row.canonical !== null && !tool.enabled
+                ? false
+                : row.canonical != null;
             return (
               <ToolMatrixChip
                 key={tool.id}
                 toolId={tool.id}
                 label={shortTool(tool.id)}
-                state={installation?.state}
+                state={state}
+                busy={toggling === `${row.key}:${tool.id}`}
+                onToggle={
+                  toggleable && state !== undefined
+                    ? (enabled) => void onToggleTool(tool.id, enabled)
+                    : undefined
+                }
               />
             );
           })}
@@ -229,21 +255,42 @@ function ToolMatrixChip({
   toolId,
   label,
   state,
+  busy,
+  onToggle,
 }: {
   toolId: string;
   label: string;
   state?: SyncState;
+  busy: boolean;
+  onToggle?: (enabled: boolean) => void;
 }) {
   const known = state !== undefined && state !== "notInstalled" && state !== "disabled";
+  const title = state
+    ? `${label}: ${STATUS_LABELS[state]}${onToggle ? " — click to toggle" : ""}`
+    : `${label}: not installed`;
+  const className = `inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${
+    known ? "border-border bg-card" : "border-transparent bg-muted text-muted-foreground"
+  }${onToggle ? " cursor-pointer hover:bg-accent" : ""}`;
+  if (onToggle) {
+    const enabledNow = state === "synced" || state === "native";
+    return (
+      <button
+        type="button"
+        data-tool={toolId}
+        data-state={state ?? "none"}
+        title={title}
+        disabled={busy}
+        onClick={() => onToggle(!enabledNow)}
+        className={className}
+      >
+        <span aria-hidden>{state ? STATUS_MARKS[state] : "-"}</span>
+        {label}
+        {busy ? "…" : ""}
+      </button>
+    );
+  }
   return (
-    <span
-      data-tool={toolId}
-      data-state={state ?? "none"}
-      title={state ? `${label}: ${STATUS_LABELS[state]}` : `${label}: not installed`}
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${
-        known ? "border-border bg-card" : "border-transparent bg-muted text-muted-foreground"
-      }`}
-    >
+    <span data-tool={toolId} data-state={state ?? "none"} title={title} className={className}>
       <span aria-hidden>{state ? STATUS_MARKS[state] : "-"}</span>
       {label}
     </span>

@@ -23,9 +23,12 @@ skill code.
 **Slices 1–3 implemented**: read-only discovery (tool detection, skill
 locations, SKILL.md scanning/validation, managedness, doctor, CLI, GUI), the
 canonical store (adopt root, import skills with fingerprinting, conflict-safe
-resolution, backups, dry-run), and one-way sync (canonical → tool, symlink
-with copy fallback, managed-ownership tracking, per-change preview). Sync
-runs only when you invoke it. See `docs/ARCHITECTURE.md`.
+resolution, backups, dry-run), one-way sync (canonical → tool, symlink
+with copy fallback, managed-ownership tracking, per-change preview), and the
+Skill×Tool enablement matrix (per-skill toggles; disabling removes only the
+managed installation), and conflict management (compare view, explicit
+backed-up resolutions, ignore). Sync and resolutions run only when you
+invoke them. See `docs/ARCHITECTURE.md`.
 
 ## CLI
 
@@ -41,6 +44,13 @@ skillsync import <path> --keep-both            # conflict: import as <name>-2
 skillsync import <path> --replace              # conflict: backup + replace
 skillsync sync --tool claude              # canonical -> tool (symlink/copy)
 skillsync sync --tool claude --dry-run    # preview the plan only
+skillsync sync --all                      # every detected, enabled tool
+skillsync disable tdd --tool gemini       # remove only the managed install
+skillsync enable tdd --tool gemini        # install it again
+skillsync conflicts                     # canonical vs unmanaged conflicts
+skillsync diff tdd --tool claude        # file + line-level compare
+skillsync resolve tdd --tool claude \
+  --resolution use-canonical [--dry-run] # explicit, backed-up resolution
 skillsync scan --json     # machine-readable output (all commands)
 ```
 

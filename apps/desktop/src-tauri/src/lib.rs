@@ -5,8 +5,8 @@
 use std::sync::Mutex;
 
 use skillsync_core::{
-    Config, DoctorReport, ImportOutcome, ImportPlan, SkillOverview, SkillSync, SkillSyncError,
-    SyncPlan, SyncRunReport,
+    Config, ConflictReport, DiffEntry, DoctorReport, ImportOutcome, ImportPlan, Resolution,
+    ResolutionReport, SkillOverview, SkillSync, SkillSyncError, SyncPlan, SyncRunReport,
 };
 
 /// Shared application state: one core facade instance per session.
@@ -55,7 +55,7 @@ fn plan_import(
     let app = state.app.lock().map_err(|_| poisoned())?;
     app.plan_import(
         std::path::Path::new(&source_path),
-        skillsync_core::ConflictResolution::Skip,
+        skillsync_core::ImportResolution::Skip,
     )
 }
 
@@ -76,6 +76,87 @@ fn sync_tool(
     app.sync_tool(&tool_id, dry_run.unwrap_or(false))
 }
 
+/// Set a Skill×Tool enablement choice and apply it (install/remove the
+/// managed installation only).
+#[tauri::command]
+fn set_skill_tool_enabled(
+    state: tauri::State<AppState>,
+    skill_id: String,
+    tool_id: String,
+    enabled: bool,
+    dry_run: Option<bool>,
+) -> Result<SyncRunReport, SkillSyncError> {
+    let mut app = state.app.lock().map_err(|_| poisoned())?;
+    app.set_skill_tool_enabled(&skill_id, &tool_id, enabled, dry_run.unwrap_or(false))
+}
+
+/// Sync every detected, enabled tool.
+#[tauri::command]
+fn sync_all(
+    state: tauri::State<AppState>,
+    dry_run: Option<bool>,
+) -> Result<Vec<SyncRunReport>, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.sync_all(dry_run.unwrap_or(false))
+}
+
+/// List canonical vs unmanaged-target conflicts (§18).
+#[tauri::command]
+fn list_conflicts(state: tauri::State<AppState>) -> Result<Vec<ConflictReport>, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.conflicts()
+}
+
+/// Diff a canonical skill against a tool's unmanaged target (§55).
+#[tauri::command]
+fn diff_skill(
+    state: tauri::State<AppState>,
+    skill_id: String,
+    tool_id: String,
+) -> Result<Vec<DiffEntry>, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.diff_skill_tool(&skill_id, &tool_id)
+}
+
+/// Resolve a conflict (explicit user choice; backups always created).
+#[tauri::command]
+fn resolve_conflict(
+    state: tauri::State<AppState>,
+    skill_id: String,
+    tool_id: String,
+    resolution: String,
+    dry_run: Option<bool>,
+) -> Result<ResolutionReport, SkillSyncError> {
+    let resolution = match resolution.as_str() {
+        "useCanonical" => Resolution::UseCanonical,
+        "importTarget" => Resolution::ImportTarget,
+        "keepBoth" => Resolution::KeepBoth,
+        other => {
+            return Err(SkillSyncError::new(
+                skillsync_core::ErrorCode::ConfigInvalid,
+                format!("unknown resolution `{other}`"),
+            ))
+        }
+    };
+    let mut app = state.app.lock().map_err(|_| poisoned())?;
+    app.resolve_conflict(&skill_id, &tool_id, resolution, dry_run.unwrap_or(false))
+}
+
+/// Ignore (or unignore) a conflict.
+#[tauri::command]
+fn set_conflict_ignored(
+    state: tauri::State<AppState>,
+    skill_id: String,
+    tool_id: String,
+    ignored: bool,
+) -> Result<Config, SkillSyncError> {
+    let mut app = state.app.lock().map_err(|_| poisoned())?;
+    let mut config = app.config().clone();
+    config.set_conflict_ignored(&skill_id, &tool_id, ignored);
+    app.save_config(config)?;
+    Ok(app.config().clone())
+}
+
 /// Execute an import. `resolution` is one of `skip`, `keepBoth`, `replace`;
 /// `skip` (the default) never overwrites existing canonical content.
 #[tauri::command]
@@ -85,11 +166,10 @@ fn import_skill(
     resolution: Option<String>,
     dry_run: Option<bool>,
 ) -> Result<ImportOutcome, SkillSyncError> {
-    use skillsync_core::ConflictResolution as R;
     let resolution = match resolution.as_deref() {
-        Some("keepBoth") => R::KeepBoth,
-        Some("replace") => R::Replace,
-        _ => R::Skip,
+        Some("keepBoth") => skillsync_core::ImportResolution::KeepBoth,
+        Some("replace") => skillsync_core::ImportResolution::Replace,
+        _ => skillsync_core::ImportResolution::Skip,
     };
     let app = state.app.lock().map_err(|_| poisoned())?;
     let plan = app.plan_import(std::path::Path::new(&source_path), resolution)?;
@@ -127,7 +207,13 @@ pub fn run() {
             plan_import,
             import_skill,
             plan_sync,
-            sync_tool
+            sync_tool,
+            sync_all,
+            set_skill_tool_enabled,
+            list_conflicts,
+            diff_skill,
+            resolve_conflict,
+            set_conflict_ignored
         ])
         .run(tauri::generate_context!())
         .expect("error while running SkillSync");
