@@ -159,6 +159,52 @@ export interface ImportOutcome {
 
 export type ImportResolution = "skip" | "keepBoth" | "replace";
 
+/** One-way sync (canonical store → tool), mirroring core `sync` types. */
+export type EffectiveMethod = "symlink" | "copy";
+
+export type PlanAction =
+  | { kind: "createLink"; target: string; source: string }
+  | { kind: "createCopy"; target: string; source: string }
+  | { kind: "updateCopy"; target: string; source: string; backupDir: string }
+  | { kind: "repairLink"; target: string; source: string }
+  | { kind: "noChange"; target?: string }
+  | { kind: "native" }
+  | { kind: "skip"; target?: string; reason: string };
+
+export interface PlanEntry {
+  skillId: string;
+  skillName: string;
+  action: PlanAction;
+  displayTarget: string;
+  notes: string[];
+}
+
+export interface SyncPlan {
+  toolId: string;
+  toolDisplayName: string;
+  method: EffectiveMethod;
+  canonicalRoot: string;
+  canonicalRootDisplay: string;
+  targetDir?: string;
+  entries: PlanEntry[];
+}
+
+export interface EntryOutcome {
+  skillId: string;
+  actionKind: string;
+  ok: boolean;
+  error?: string;
+  backupDir?: string;
+}
+
+export interface SyncRunReport {
+  toolId: string;
+  method: EffectiveMethod;
+  dryRun: boolean;
+  succeeded: EntryOutcome[];
+  failed: EntryOutcome[];
+}
+
 /** Structured native error (design doc §68). */
 export interface SkillSyncError {
   code: string;

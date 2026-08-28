@@ -16,6 +16,7 @@ pub enum ErrorCode {
     ConfigInvalid,
     InvalidSkill,
     ToolNotFound,
+    ToolDisabled,
     GitNotFound,
     TargetConflict,
     BrokenSymlink,

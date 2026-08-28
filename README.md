@@ -20,11 +20,12 @@ skill code.
 
 ## Status
 
-**Slices 1–2 implemented**: read-only discovery (tool detection, skill
-locations, SKILL.md scanning/validation, managedness, doctor, CLI, GUI) and
-the canonical store (adopt root, import skills with fingerprinting,
-conflict-safe resolution, backups, dry-run). Tool-directory synchronization
-(symlink/copy installation) is the next slice. See `docs/ARCHITECTURE.md`.
+**Slices 1–3 implemented**: read-only discovery (tool detection, skill
+locations, SKILL.md scanning/validation, managedness, doctor, CLI, GUI), the
+canonical store (adopt root, import skills with fingerprinting, conflict-safe
+resolution, backups, dry-run), and one-way sync (canonical → tool, symlink
+with copy fallback, managed-ownership tracking, per-change preview). Sync
+runs only when you invoke it. See `docs/ARCHITECTURE.md`.
 
 ## CLI
 
@@ -38,6 +39,8 @@ skillsync import <path>   # import a skill into the canonical store
 skillsync import <path> --dry-run              # preview the plan only
 skillsync import <path> --keep-both            # conflict: import as <name>-2
 skillsync import <path> --replace              # conflict: backup + replace
+skillsync sync --tool claude              # canonical -> tool (symlink/copy)
+skillsync sync --tool claude --dry-run    # preview the plan only
 skillsync scan --json     # machine-readable output (all commands)
 ```
 

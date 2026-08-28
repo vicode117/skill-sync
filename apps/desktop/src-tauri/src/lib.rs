@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 use skillsync_core::{
     Config, DoctorReport, ImportOutcome, ImportPlan, SkillOverview, SkillSync, SkillSyncError,
+    SyncPlan, SyncRunReport,
 };
 
 /// Shared application state: one core facade instance per session.
@@ -58,6 +59,23 @@ fn plan_import(
     )
 }
 
+#[tauri::command]
+fn plan_sync(state: tauri::State<AppState>, tool_id: String) -> Result<SyncPlan, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.plan_sync(&tool_id)
+}
+
+/// Execute a sync (dry-run capable).
+#[tauri::command]
+fn sync_tool(
+    state: tauri::State<AppState>,
+    tool_id: String,
+    dry_run: Option<bool>,
+) -> Result<SyncRunReport, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.sync_tool(&tool_id, dry_run.unwrap_or(false))
+}
+
 /// Execute an import. `resolution` is one of `skip`, `keepBoth`, `replace`;
 /// `skip` (the default) never overwrites existing canonical content.
 #[tauri::command]
@@ -107,7 +125,9 @@ pub fn run() {
             run_doctor,
             adopt_canonical_root,
             plan_import,
-            import_skill
+            import_skill,
+            plan_sync,
+            sync_tool
         ])
         .run(tauri::generate_context!())
         .expect("error while running SkillSync");

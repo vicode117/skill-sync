@@ -34,6 +34,15 @@ enum Commands {
     Doctor,
     /// Create the canonical skill root folder if it does not exist yet.
     AdoptRoot,
+    /// Sync canonical skills into one tool's skill directory (one-way).
+    Sync {
+        /// Tool to sync into (see `skillsync tools`).
+        #[arg(long)]
+        tool: String,
+        /// Preview the plan without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Import a skill directory into the canonical store.
     Import {
         /// Path of the skill directory to import.
@@ -67,6 +76,7 @@ fn run(cli: Cli) -> i32 {
         Commands::Scan => cmd_scan(&app, cli.json),
         Commands::Doctor => cmd_doctor(&app, cli.json),
         Commands::AdoptRoot => cmd_adopt_root(&app, cli.json),
+        Commands::Sync { tool, dry_run } => cmd_sync(&app, &tool, dry_run, cli.json),
         Commands::Import {
             path,
             dry_run,
@@ -309,6 +319,71 @@ fn print_json<T: serde::Serialize>(value: &T) -> skillsync_core::Result<i32> {
     })?;
     println!("{text}");
     Ok(0)
+}
+
+fn cmd_sync(
+    app: &SkillSync,
+    tool_id: &str,
+    dry_run: bool,
+    json: bool,
+) -> skillsync_core::Result<i32> {
+    let plan = app.plan_sync(tool_id)?;
+    if dry_run && json {
+        return print_json(&plan);
+    }
+    if !json {
+        let method = match plan.method {
+            skillsync_core::EffectiveMethod::Symlink => "symlink",
+            skillsync_core::EffectiveMethod::Copy => "copy",
+        };
+        let target = plan
+            .target_dir
+            .as_deref()
+            .map(|t| t.display().to_string())
+            .unwrap_or_else(|| "<no location>".into());
+        println!(
+            "SYNC PLAN {} ({method}) -> {}",
+            plan.tool_display_name, target
+        );
+        for entry in &plan.entries {
+            let label = entry.action.kind_label();
+            let detail = match &entry.action {
+                skillsync_core::PlanAction::CreateLink { source, .. } => format!(
+                    "-> {}",
+                    skillsync_core::env::abbreviate_home(source, app.env())
+                ),
+                skillsync_core::PlanAction::Skip { reason, .. } => format!("({reason})"),
+                _ => String::new(),
+            };
+            println!(
+                "  {:<10} {:<24} {} {}",
+                label.to_uppercase(),
+                entry.skill_name,
+                entry.display_target,
+                detail
+            );
+        }
+        for note in plan.entries.iter().flat_map(|e| e.notes.iter()) {
+            println!("  note: {note}");
+        }
+    }
+    let report = app.sync_tool(tool_id, dry_run)?;
+    if json {
+        return print_json(&report);
+    }
+    if dry_run {
+        println!("DRY RUN — no changes made.");
+    }
+    for failure in &report.failed {
+        println!(
+            "FAILED {}: {} ({})",
+            failure.skill_id,
+            failure.action_kind,
+            failure.error.as_deref().unwrap_or("unknown error")
+        );
+    }
+    println!("Sync {} — {}", plan.tool_display_name, report.summary());
+    Ok(if report.failed.is_empty() { 0 } else { 1 })
 }
 
 fn cmd_adopt_root(app: &SkillSync, json: bool) -> skillsync_core::Result<i32> {

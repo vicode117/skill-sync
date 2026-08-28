@@ -139,6 +139,45 @@ pub fn remove_dir_verified(path: &Path, what: &str) -> Result<()> {
         })
 }
 
+/// Probe whether directory symlinks can be created on this platform/account.
+/// Uses a throwaway directory under the system temp dir; never touches user
+/// locations. `Err` carries a human-readable reason.
+pub fn probe_symlink_capability() -> std::result::Result<(), String> {
+    static PROBE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = PROBE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let probe = std::env::temp_dir().join(format!(
+        "skillsync-symlink-probe-{}-{n}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&probe);
+    let cleanup = || {
+        let _ = std::fs::remove_dir_all(&probe);
+    };
+    std::fs::create_dir_all(&probe).map_err(|e| e.to_string())?;
+    let target = probe.join("target-dir");
+    let link = probe.join("link-dir");
+    let result = std::fs::create_dir(&target).map_err(|e| e.to_string());
+    if let Err(e) = result {
+        cleanup();
+        return Err(e);
+    }
+    #[cfg(unix)]
+    let link_result = std::os::unix::fs::symlink(&target, &link);
+    #[cfg(windows)]
+    let link_result = std::os::windows::fs::symlink_dir(&target, &link);
+    #[cfg(not(any(unix, windows)))]
+    let link_result: std::io::Result<()> = Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "platform unsupported",
+    ));
+    cleanup();
+    link_result.map_err(|e| {
+        format!(
+            "directory symlinks unavailable on this platform/account ({e}); falling back to copies"
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -286,41 +286,7 @@ pub fn run_doctor(
 }
 
 fn symlink_capability_check(env: &EnvContext) -> DoctorCheck {
-    // Probe in our own throwaway directory under the system temp dir,
-    // never in user locations.
-    let probe =
-        std::env::temp_dir().join(format!("skillsync-symlink-probe-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&probe);
-    if std::fs::create_dir_all(&probe).is_err() {
-        return check(
-            "symlink-capability",
-            "Symlink capability",
-            CheckStatus::Warning,
-            "could not create a temp directory to probe symlink support",
-        );
-    }
-    let target = probe.join("target-dir");
-    let link = probe.join("link-dir");
-    if std::fs::create_dir(&target).is_err() {
-        let _ = std::fs::remove_dir_all(&probe);
-        return check(
-            "symlink-capability",
-            "Symlink capability",
-            CheckStatus::Warning,
-            "could not create probe directory",
-        );
-    }
-    #[cfg(unix)]
-    let result = std::os::unix::fs::symlink(&target, &link);
-    #[cfg(windows)]
-    let result = std::os::windows::fs::symlink_dir(&target, &link);
-    #[cfg(not(any(unix, windows)))]
-    let result: std::io::Result<()> = Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "platform unsupported",
-    ));
-
-    let outcome = match result {
+    match crate::fsutil::probe_symlink_capability() {
         Ok(()) => check(
             "symlink-capability",
             "Symlink capability",
@@ -330,18 +296,13 @@ fn symlink_capability_check(env: &EnvContext) -> DoctorCheck {
                 env.os
             ),
         ),
-        Err(err) => check(
+        Err(reason) => check(
             "symlink-capability",
             "Symlink capability",
             CheckStatus::Warning,
-            format!(
-                "directory symlinks unavailable on this platform/account ({err}); \
-                 SkillSync will fall back to copies in auto mode"
-            ),
+            format!("{reason}; SkillSync will fall back to copies in auto mode"),
         ),
-    };
-    let _ = std::fs::remove_dir_all(&probe);
-    outcome
+    }
 }
 
 fn git_check(env: &EnvContext) -> DoctorCheck {

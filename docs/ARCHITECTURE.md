@@ -1,8 +1,9 @@
 # SkillSync Architecture
 
-Status: design for MVP. Slices 1–2 implemented (read-only discovery +
-canonical store adoption/import). Slices 3+ mutate tool directories and
-remain gated on the design being approved for destructive behavior.
+Status: design for MVP. Slices 1–3 implemented (read-only discovery,
+canonical store adoption/import, one-way sync with managed-ownership
+tracking). Tool-directory writes happen only through explicit user
+commands (sync/import in CLI or GUI), preview-first, never automatic.
 
 ## 1. MVP Architecture Summary
 
@@ -172,11 +173,29 @@ Dependencies for this slice only — Rust: `serde`, `serde_json`, `serde_yaml`,
 Frontend: React, Vite, TypeScript, Tailwind, shadcn/ui primitives, Tauri API,
 Vitest + Testing Library (dev).
 
+## 7c. Slice 3: One-Way Sync (implemented)
+
+- `skillsync sync --tool <id> [--dry-run]` / GUI per-tool SyncControl:
+  plan → preview → apply/dry-run, per skill × tool.
+- Method resolution: config `syncMethod` (auto/symlink/copy) + adapter
+  knowledge (Gemini avoids symlinks → copy) + a live platform probe;
+  probe failure falls back to copies (§44).
+- Plan actions: `createLink`, `createCopy`, `updateCopy` (backup first),
+  `repairLink` (managed dangling links only), `noChange`, `native`
+  (tool reads the store directly — nothing to install), `skip`
+  (unmanaged/conflict/foreign — reported, never touched).
+- Ownership (§28): symlinks are owned when they resolve into the canonical
+  store; copies only when recorded in `~/.skillsync/managed.json`.
+  Unmanaged targets are never modified or deleted; conflicts surface as
+  `skip` with a reason and wait for explicit resolution (Slice 5).
+- Copy drift is detected by comparing fingerprints against the registry
+  record; updates back up the old copy first (§31).
+- Reports exactly what succeeded and failed (§59); exit code 1 on failures.
+
 ## 8. Later Slices (not implemented in this pass)
 
-~~2 Canonical store + import/fingerprint~~ (done, §7b) → 3 one-way sync to
-Claude (plan, symlink/copy, dry-run, safe managed removal) → 4 multi-tool +
-Skill×Tool matrix enablement → 5 conflict management + compare → 6 automatic
-sync (watcher, debounced, copy-target refresh only) → 7 explicit git
-integration. Each slice lands only after the previous one is working and
-tested.
+~~2 Canonical store + import/fingerprint~~ (done, §7b) ·
+~~3 one-way sync~~ (done, §7c) → 4 multi-tool + Skill×Tool matrix
+enablement → 5 conflict management + compare → 6 automatic sync (watcher,
+debounced, copy-target refresh only) → 7 explicit git integration.
+Each slice lands only after the previous one is working and tested.

@@ -103,6 +103,12 @@ impl AppPaths {
         self.home.join("config.json")
     }
 
+    /// Registry of SkillSync-managed copy installations (§28). Kept outside
+    /// skill directories so skills stay portable without SkillSync.
+    pub fn managed_file(&self) -> PathBuf {
+        self.home.join("managed.json")
+    }
+
     pub fn backups_dir(&self) -> PathBuf {
         self.home.join("backups")
     }

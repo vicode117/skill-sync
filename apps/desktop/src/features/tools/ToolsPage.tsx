@@ -2,6 +2,7 @@ import { RefreshButton } from "@/components/feedback";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { SyncControl } from "./SyncControl";
 import type { SkillOverview, ToolInfo } from "@/types/domain";
 
 export function ToolsPage({
@@ -37,6 +38,7 @@ export function ToolsPage({
             tool={tool}
             onToggle={onToggleTool}
             busy={busyTool === tool.id}
+            onSynced={onRefresh}
           />
         ))}
       </ul>
@@ -48,10 +50,12 @@ function ToolCard({
   tool,
   onToggle,
   busy,
+  onSynced,
 }: {
   tool: ToolInfo;
   onToggle: (toolId: string, enabled: boolean) => Promise<void>;
   busy: boolean;
+  onSynced: () => void;
 }) {
   return (
     <Card className="p-4" data-testid="tool-card">
@@ -103,6 +107,10 @@ function ToolCard({
           Reload: <strong className="text-foreground">{tool.reloadGuidance.summary}</strong>
         </span>
       </div>
+
+      {tool.enabled ? (
+        <SyncControl toolId={tool.id} toolName={tool.displayName} onSynced={onSynced} />
+      ) : null}
     </Card>
   );
 }

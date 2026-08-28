@@ -198,7 +198,7 @@ pub fn plan_import(
             })
         }
         ConflictResolution::Replace => {
-            let backup_dir = backup_dir_for(paths, &skill_id);
+            let backup_dir = backup_dir_for(paths, "canonical", &skill_id);
             notes.push(format!(
                 "`{skill_id}` exists with different content; existing copy will be backed up to {} first",
                 backup_dir.display()
@@ -251,7 +251,14 @@ pub fn execute_import(env: &EnvContext, plan: &ImportPlan, dry_run: bool) -> Res
                     dry_run: true,
                 });
             }
-            backup_skill(&target, backup_dir, &plan.skill_id, env)?;
+            backup_skill_dir(
+                &target,
+                backup_dir,
+                &plan.skill_id,
+                "import",
+                "canonical",
+                env,
+            )?;
             // Ownership & boundary verified before the recursive delete:
             // the target is inside the canonical root and was just backed up.
             ensure_within(&target, &plan.canonical_root)?;
@@ -366,9 +373,16 @@ pub fn copy_skill_dir(source: &Path, target: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Back up a canonical skill directory before replacing it (§31): copy of
-/// the tree + a small metadata file explaining when/what/where-from.
-fn backup_skill(target: &Path, backup_dir: &Path, skill_id: &str, env: &EnvContext) -> Result<()> {
+/// Back up a skill directory before replacing it (§31): copy of the tree +
+/// a small metadata file explaining when/what/where-from.
+pub(crate) fn backup_skill_dir(
+    target: &Path,
+    backup_dir: &Path,
+    skill_id: &str,
+    operation: &str,
+    tool_id: &str,
+    env: &EnvContext,
+) -> Result<()> {
     if backup_dir.exists() {
         return Err(SkillSyncError::new(
             ErrorCode::Io,
@@ -383,7 +397,8 @@ fn backup_skill(target: &Path, backup_dir: &Path, skill_id: &str, env: &EnvConte
     copy_skill_dir(target, backup_dir)?;
     let metadata = serde_json::json!({
         "when": iso_utc_now(),
-        "tool": "canonical",
+        "operation": operation,
+        "tool": tool_id,
         "skill": skill_id,
         "originalPath": target.to_string_lossy(),
         "home": env.home.to_string_lossy(),
@@ -397,16 +412,15 @@ fn backup_skill(target: &Path, backup_dir: &Path, skill_id: &str, env: &EnvConte
     Ok(())
 }
 
-fn backup_dir_for(paths: &AppPaths, skill_id: &str) -> PathBuf {
-    // SkillSync-owned location: ~/.skillsync/backups/<ts>-canonical-<skill>
-    paths.backups_dir().join(format!(
-        "{ts}-canonical-{skill_id}",
-        ts = timestamp_compact()
-    ))
+/// SkillSync-owned backup location: `~/.skillsync/backups/<ts>-<op>-…`.
+pub fn backup_dir_for(paths: &AppPaths, label: &str, skill_id: &str) -> PathBuf {
+    paths
+        .backups_dir()
+        .join(format!("{ts}-{label}-{skill_id}", ts = timestamp_compact()))
 }
 
 /// `YYYYMMDD-HHMMSS` in UTC, no external time dependency.
-fn timestamp_compact() -> String {
+pub fn timestamp_compact() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -416,7 +430,7 @@ fn timestamp_compact() -> String {
 }
 
 /// ISO 8601 UTC timestamp for backup metadata.
-fn iso_utc_now() -> String {
+pub fn iso_utc_now() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())

@@ -7,6 +7,8 @@ import type {
   ImportResolution,
   SkillOverview,
   SkillSyncError,
+  SyncPlan,
+  SyncRunReport,
 } from "@/types/domain";
 
 /** Coerce anything thrown across the native boundary into a SkillSyncError. */
@@ -38,6 +40,9 @@ export const api = {
     dryRun = false,
   ): Promise<ImportOutcome> =>
     invoke("import_skill", { sourcePath, resolution, dryRun }),
+  planSync: (toolId: string): Promise<SyncPlan> => invoke("plan_sync", { toolId }),
+  syncTool: (toolId: string, dryRun = false): Promise<SyncRunReport> =>
+    invoke("sync_tool", { toolId, dryRun }),
 };
 
 export type Api = typeof api;

@@ -10,6 +10,11 @@ vi.mock("@/lib/api", () => ({
     saveConfig: vi.fn(),
     scanOverview: vi.fn(),
     runDoctor: vi.fn(),
+    adoptCanonicalRoot: vi.fn(),
+    planImport: vi.fn(),
+    importSkill: vi.fn(),
+    planSync: vi.fn(),
+    syncTool: vi.fn(),
   },
 }));
 
@@ -79,5 +84,63 @@ describe("ToolsPage", () => {
     );
     await user.click(screen.getByLabelText("Claude Code integration"));
     expect(onToggleTool).toHaveBeenCalledWith("claude", false);
+  });
+
+  it("previews the sync plan and applies only on confirmation", async () => {
+    const user = userEvent.setup();
+    const { api } = await import("@/lib/api");
+    const onRefresh = vi.fn();
+    vi.mocked(api.planSync).mockResolvedValueOnce({
+      toolId: "claude",
+      toolDisplayName: "Claude Code",
+      method: "symlink",
+      canonicalRoot: "/h/.agents/skills",
+      canonicalRootDisplay: "~/.agents/skills",
+      targetDir: "/h/.claude/skills",
+      entries: [
+        {
+          skillId: "tdd",
+          skillName: "tdd",
+          action: { kind: "createLink", target: "/h/.claude/skills/tdd", source: "/h/.agents/skills/tdd" },
+          displayTarget: "~/.claude/skills/tdd",
+          notes: [],
+        },
+        {
+          skillId: "legacy",
+          skillName: "legacy",
+          action: { kind: "skip", target: "/h/.claude/skills/legacy", reason: "unmanaged conflict" },
+          displayTarget: "~/.claude/skills/legacy",
+          notes: [],
+        },
+      ],
+    });
+    vi.mocked(api.syncTool).mockResolvedValueOnce({
+      toolId: "claude",
+      method: "symlink",
+      dryRun: false,
+      succeeded: [
+        { skillId: "tdd", actionKind: "createLink", ok: true },
+      ],
+      failed: [],
+    });
+
+    render(
+      <ToolsPage
+        overview={makeOverview()}
+        loading={false}
+        onRefresh={onRefresh}
+        onToggleTool={vi.fn()}
+        busyTool={null}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Sync from canonical store/ }));
+    expect(api.planSync).toHaveBeenCalledWith("claude");
+    expect(await screen.findByText(/symlink into/)).toBeInTheDocument();
+    expect(screen.getByText(/unmanaged conflict/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Apply \(1 change\)/ }));
+    expect(api.syncTool).toHaveBeenCalledWith("claude", false);
+    await screen.findByText(/1 succeeded, 0 failed/);
+    expect(onRefresh).toHaveBeenCalled();
   });
 });

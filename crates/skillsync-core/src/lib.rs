@@ -13,10 +13,12 @@ pub mod error;
 pub mod fingerprint;
 pub mod frontmatter;
 pub mod fsutil;
+pub mod managed;
 pub mod overview;
 pub mod scan;
 pub mod skill;
 pub mod store;
+pub mod sync;
 
 use std::sync::Arc;
 
@@ -36,6 +38,7 @@ pub use store::{
     adopt_canonical_root as adopt_canonical_root_op, ConflictResolution, ImportAction,
     ImportOutcome, ImportPlan,
 };
+pub use sync::{EffectiveMethod, EntryOutcome, PlanAction, PlanEntry, SyncPlan, SyncRunReport};
 
 /// Facade over the environment, config and adapters. Construct once per
 /// process (CLI run, GUI session) and call the read-only operations.
@@ -208,6 +211,46 @@ impl SkillSync {
     ) -> Result<store::ImportOutcome> {
         store::execute_import(&self.env, plan, dry_run)
     }
+
+    fn sync_context(&self) -> sync::SyncContext<'_> {
+        sync::SyncContext {
+            env: &self.env,
+            paths: &self.paths,
+            config: &self.config,
+        }
+    }
+
+    /// Plan a one-way sync of all canonical skills into one tool (§75
+    /// Slice 3). Read-only; preview freely.
+    pub fn plan_sync(&self, tool_id: &str) -> Result<SyncPlan> {
+        let adapter = self
+            .adapters
+            .iter()
+            .find(|a| a.id() == tool_id)
+            .ok_or_else(|| {
+                SkillSyncError::new(
+                    ErrorCode::ToolNotFound,
+                    format!("no adapter for tool `{tool_id}`"),
+                )
+                .with_tool(tool_id)
+            })?;
+        if !self.config.is_tool_enabled(tool_id) {
+            return Err(SkillSyncError::new(
+                ErrorCode::ToolDisabled,
+                format!("integration for `{tool_id}` is disabled in the configuration"),
+            )
+            .with_tool(tool_id)
+            .recoverable());
+        }
+        let canonical_skills = self.canonical_skills()?;
+        sync::plan_tool_sync(&self.sync_context(), adapter.as_ref(), &canonical_skills)
+    }
+
+    /// Plan and execute a sync (dry-run capable).
+    pub fn sync_tool(&self, tool_id: &str, dry_run: bool) -> Result<SyncRunReport> {
+        let plan = self.plan_sync(tool_id)?;
+        sync::execute_sync(&self.sync_context(), &plan, dry_run)
+    }
 }
 
 #[cfg(test)]
@@ -354,6 +397,29 @@ mod tests {
         assert!(matches!(cursor.managedness, Managedness::NativeShared));
     }
 
+    #[test]
+    fn sync_is_rejected_for_disabled_tools() {
+        let (_tmp, mut app) = sandbox();
+        let mut config = Config::default();
+        config.tools.insert(
+            "claude".into(),
+            ToolOverride {
+                enabled: Some(false),
+                ..Default::default()
+            },
+        );
+        app.save_config(config).unwrap();
+        let err = app.plan_sync("claude").unwrap_err();
+        assert_eq!(err.code, ErrorCode::ToolDisabled);
+        assert!(err.recoverable);
+    }
+
+    #[test]
+    fn sync_unknown_tool_is_tool_not_found() {
+        let (_tmp, app) = sandbox();
+        let err = app.plan_sync("not-a-tool").unwrap_err();
+        assert_eq!(err.code, ErrorCode::ToolNotFound);
+    }
     #[test]
     fn config_round_trip_through_facade() {
         let (_tmp, mut app) = sandbox();
