@@ -12,6 +12,8 @@ export function SettingsPage() {
   const [canonicalRoot, setCanonicalRoot] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [adopting, setAdopting] = useState(false);
+  const [adopted, setAdopted] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [doctor, setDoctor] = useState<DoctorReport | null>(null);
@@ -41,6 +43,19 @@ export function SettingsPage() {
       setError(normalizeError(e).message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const adoptRoot = async () => {
+    setAdopting(true);
+    try {
+      const result = await api.adoptCanonicalRoot();
+      setAdopted(result.canonicalRoot);
+      setError(null);
+    } catch (e) {
+      setError(normalizeError(e).message);
+    } finally {
+      setAdopting(false);
     }
   };
 
@@ -109,6 +124,14 @@ export function SettingsPage() {
           <Button onClick={() => void save()} disabled={saving || !config}>
             {saving ? "Saving…" : "Save settings"}
           </Button>
+          <Button variant="outline" onClick={() => void adoptRoot()} disabled={adopting}>
+            {adopting ? "Creating…" : "Create canonical folder"}
+          </Button>
+          {adopted ? (
+            <span className="text-sm text-success" role="status">
+              Ready: {adopted}
+            </span>
+          ) : null}
           {saved ? (
             <span className="text-sm text-success" role="status">
               Saved.

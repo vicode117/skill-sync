@@ -5,7 +5,7 @@
 //! the mutation API grows in Slice 3 on top of these primitives.
 
 use std::io::Write;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use crate::error::{ErrorCode, Result, SkillSyncError};
 
@@ -72,14 +72,38 @@ pub fn validate_no_traversal(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Ensure `candidate` stays inside `boundary` after canonicalization of the
-/// boundary (the candidate itself may not exist yet).
+/// Ensure `candidate` stays inside `boundary` after resolution (the
+/// candidate itself may not exist yet). Symlinked ancestors (macOS
+/// `/var` → `/private/var`, and similar) are resolved via the deepest
+/// existing ancestor so the containment check is sound.
 pub fn ensure_within(candidate: &Path, boundary: &Path) -> Result<()> {
     validate_no_traversal(candidate)?;
     let boundary = boundary
         .canonicalize()
         .map_err(|e| SkillSyncError::io(&e, boundary))?;
-    if !candidate.starts_with(&boundary) {
+
+    // Walk up to the deepest ancestor that exists, remembering the rest.
+    let mut existing = candidate.to_path_buf();
+    let mut suffix = PathBuf::new();
+    while !existing.exists() {
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) if parent != existing => {
+                suffix = Path::new(name).join(&suffix);
+                existing = parent.to_path_buf();
+            }
+            _ => break,
+        }
+    }
+    let base = existing
+        .canonicalize()
+        .map_err(|e| SkillSyncError::io(&e, existing))?;
+    let resolved = if suffix.as_os_str().is_empty() {
+        base
+    } else {
+        base.join(suffix)
+    };
+
+    if !resolved.starts_with(&boundary) {
         return Err(SkillSyncError::new(
             ErrorCode::UnsafePath,
             "path escapes the allowed boundary",

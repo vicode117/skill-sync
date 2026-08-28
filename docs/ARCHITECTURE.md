@@ -1,6 +1,8 @@
 # SkillSync Architecture
 
-Status: design for MVP, Slice 1 (read-only discovery) implemented.
+Status: design for MVP. Slices 1–2 implemented (read-only discovery +
+canonical store adoption/import). Slices 3+ mutate tool directories and
+remain gated on the design being approved for destructive behavior.
 
 ## 1. MVP Architecture Summary
 
@@ -146,6 +148,25 @@ Adapter defaults (verified against vendor docs, 2026-08; all overridable):
 - Tauri GUI: Skills page (search/filter/refresh), Tools page, Settings
   (config only). No filesystem mutation except `~/.skillsync/config.json`.
 
+## 7b. Slice 2: Canonical Store (implemented)
+
+- `skillsync adopt-root` / Settings button: creates the configured
+  canonical root when missing (never over an existing file, never `/` or
+  home). An explicit user action; nothing is adopted automatically.
+- `skillsync import <path> [--dry-run] [--keep-both|--replace]` / GUI
+  ImportControl: plan → preview → confirm → execute.
+  - Plan is computed first and is fully previewable; dry-run writes nothing.
+  - Content identity decides: identical target → no-op; differing target →
+    conflict. Conflicts require an explicit resolution (`skip` blocks with
+    `TARGET_CONFLICT`, `keep-both` imports as `<name>-2`, `replace` backs up
+    to `~/.skillsync/backups/<ts>-canonical-<skill>/` + `<…>.json` metadata
+    (when/tool/skill/original path) before any replacement).
+  - First import may create the (empty) canonical root; the source
+    directory is never modified; tool directories are never touched.
+  - Copies preserve the full tree (subdirectories and symlinks).
+- Fingerprints (SHA-256 tree hash) drive identity everywhere; timestamps
+  never decide (§54).
+
 Dependencies for this slice only — Rust: `serde`, `serde_json`, `serde_yaml`,
 `thiserror`, `dirs`, `walkdir`, `sha2`, `hex`, `clap` (CLI), `tempfile` (dev).
 Frontend: React, Vite, TypeScript, Tailwind, shadcn/ui primitives, Tauri API,
@@ -153,8 +174,9 @@ Vitest + Testing Library (dev).
 
 ## 8. Later Slices (not implemented in this pass)
 
-2 Canonical store + import/fingerprint → 3 one-way sync to Claude (plan,
-symlink/copy, dry-run, safe managed removal) → 4 multi-tool + Skill×Tool
-matrix → 5 conflict management + compare → 6 automatic sync (watcher,
-debounced, copy-target refresh only) → 7 explicit git integration.
-Each slice lands only after the previous one is working and tested.
+~~2 Canonical store + import/fingerprint~~ (done, §7b) → 3 one-way sync to
+Claude (plan, symlink/copy, dry-run, safe managed removal) → 4 multi-tool +
+Skill×Tool matrix enablement → 5 conflict management + compare → 6 automatic
+sync (watcher, debounced, copy-target refresh only) → 7 explicit git
+integration. Each slice lands only after the previous one is working and
+tested.

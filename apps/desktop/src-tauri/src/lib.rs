@@ -4,7 +4,9 @@
 
 use std::sync::Mutex;
 
-use skillsync_core::{Config, DoctorReport, SkillOverview, SkillSync, SkillSyncError};
+use skillsync_core::{
+    Config, DoctorReport, ImportOutcome, ImportPlan, SkillOverview, SkillSync, SkillSyncError,
+};
 
 /// Shared application state: one core facade instance per session.
 pub struct AppState {
@@ -36,6 +38,46 @@ fn run_doctor(state: tauri::State<AppState>) -> Result<DoctorReport, SkillSyncEr
     Ok(app.doctor())
 }
 
+#[tauri::command]
+fn adopt_canonical_root(
+    state: tauri::State<AppState>,
+) -> Result<std::path::PathBuf, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.adopt_canonical_root()
+}
+
+#[tauri::command]
+fn plan_import(
+    state: tauri::State<AppState>,
+    source_path: String,
+) -> Result<ImportPlan, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.plan_import(
+        std::path::Path::new(&source_path),
+        skillsync_core::ConflictResolution::Skip,
+    )
+}
+
+/// Execute an import. `resolution` is one of `skip`, `keepBoth`, `replace`;
+/// `skip` (the default) never overwrites existing canonical content.
+#[tauri::command]
+fn import_skill(
+    state: tauri::State<AppState>,
+    source_path: String,
+    resolution: Option<String>,
+    dry_run: Option<bool>,
+) -> Result<ImportOutcome, SkillSyncError> {
+    use skillsync_core::ConflictResolution as R;
+    let resolution = match resolution.as_deref() {
+        Some("keepBoth") => R::KeepBoth,
+        Some("replace") => R::Replace,
+        _ => R::Skip,
+    };
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    let plan = app.plan_import(std::path::Path::new(&source_path), resolution)?;
+    app.execute_import(&plan, dry_run.unwrap_or(false))
+}
+
 fn poisoned() -> SkillSyncError {
     SkillSyncError::new(
         skillsync_core::ErrorCode::Io,
@@ -62,7 +104,10 @@ pub fn run() {
             get_config,
             save_config,
             scan_overview,
-            run_doctor
+            run_doctor,
+            adopt_canonical_root,
+            plan_import,
+            import_skill
         ])
         .run(tauri::generate_context!())
         .expect("error while running SkillSync");

@@ -20,11 +20,11 @@ skill code.
 
 ## Status
 
-**Slice 1 — read-only discovery** is implemented: tool detection, skill
-location discovery, SKILL.md scanning/validation, managedness classification,
-doctor diagnostics, CLI, and GUI. No filesystem mutation except
-`~/.skillsync/config.json`. See `docs/ARCHITECTURE.md` for the design and
-the slice roadmap.
+**Slices 1–2 implemented**: read-only discovery (tool detection, skill
+locations, SKILL.md scanning/validation, managedness, doctor, CLI, GUI) and
+the canonical store (adopt root, import skills with fingerprinting,
+conflict-safe resolution, backups, dry-run). Tool-directory synchronization
+(symlink/copy installation) is the next slice. See `docs/ARCHITECTURE.md`.
 
 ## CLI
 
@@ -33,6 +33,11 @@ skillsync list            # all discovered skills (canonical + per tool)
 skillsync tools           # detected tools, locations, capabilities
 skillsync scan            # full read-only scan of every tool location
 skillsync doctor          # environment diagnostics
+skillsync adopt-root      # create the canonical root folder if missing
+skillsync import <path>   # import a skill into the canonical store
+skillsync import <path> --dry-run              # preview the plan only
+skillsync import <path> --keep-both            # conflict: import as <name>-2
+skillsync import <path> --replace              # conflict: backup + replace
 skillsync scan --json     # machine-readable output (all commands)
 ```
 

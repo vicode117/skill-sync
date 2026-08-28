@@ -4,6 +4,7 @@ import { RefreshButton } from "@/components/feedback";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ImportControl } from "./ImportControl";
 import type { SkillRow, SkillOverview, SyncState, ValidationIssue } from "@/types/domain";
 import { STATUS_LABELS, STATUS_MARKS } from "@/types/domain";
 
@@ -153,7 +154,12 @@ export function SkillsPage({
       ) : (
         <ul className="space-y-3">
           {filtered.map((row) => (
-            <SkillCard key={row.key} row={row} tools={overview?.tools ?? []} />
+            <SkillCard
+              key={row.key}
+              row={row}
+              tools={overview?.tools ?? []}
+              onImported={() => void onRefresh()}
+            />
           ))}
         </ul>
       )}
@@ -161,7 +167,20 @@ export function SkillsPage({
   );
 }
 
-function SkillCard({ row, tools }: { row: SkillRow; tools: SkillOverview["tools"] }) {
+function SkillCard({
+  row,
+  tools,
+  onImported,
+}: {
+  row: SkillRow;
+  tools: SkillOverview["tools"];
+  onImported: () => void;
+}) {
+  const importableSource = row.canonical
+    ? null
+    : (row.installations.find(
+        (i) => i.state === "unmanaged" && i.path !== "" && i.managedness.kind === "unmanaged",
+      )?.path ?? null);
   return (
     <Card className="p-4" data-testid="skill-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -198,6 +217,10 @@ function SkillCard({ row, tools }: { row: SkillRow; tools: SkillOverview["tools"
       </p>
 
       <ValidationLines issues={collectIssues(row)} />
+
+      {importableSource ? (
+        <ImportControl sourcePath={importableSource} onImported={onImported} />
+      ) : null}
     </Card>
   );
 }

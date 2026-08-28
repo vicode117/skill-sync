@@ -133,6 +133,32 @@ export interface DoctorReport {
   checks: DoctorCheck[];
 }
 
+/** Planned action for one import (mirrors core `ImportAction`). */
+export type ImportAction =
+  | { kind: "create"; target: string }
+  | { kind: "alreadyPresent"; target: string }
+  | { kind: "keepBoth"; target: string }
+  | { kind: "replace"; target: string; backupDir: string }
+  | { kind: "conflict"; target: string };
+
+export interface ImportPlan {
+  source: string;
+  canonicalRoot: string;
+  skillId: string;
+  action: ImportAction;
+  fingerprint?: string;
+  notes: string[];
+}
+
+export interface ImportOutcome {
+  actionTaken: ImportAction;
+  target: string;
+  fingerprint?: string;
+  dryRun: boolean;
+}
+
+export type ImportResolution = "skip" | "keepBoth" | "replace";
+
 /** Structured native error (design doc §68). */
 export interface SkillSyncError {
   code: string;

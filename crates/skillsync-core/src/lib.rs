@@ -16,6 +16,7 @@ pub mod fsutil;
 pub mod overview;
 pub mod scan;
 pub mod skill;
+pub mod store;
 
 use std::sync::Arc;
 
@@ -30,6 +31,10 @@ pub use scan::{
 pub use skill::{
     Skill, SkillFileEntry, SkillFrontmatter, SkillScope, SkillSource, ValidationIssue,
     ValidationSeverity,
+};
+pub use store::{
+    adopt_canonical_root as adopt_canonical_root_op, ConflictResolution, ImportAction,
+    ImportOutcome, ImportPlan,
 };
 
 /// Facade over the environment, config and adapters. Construct once per
@@ -177,6 +182,31 @@ impl SkillSync {
     /// Diagnostics (shared by `skillsync doctor` and the GUI).
     pub fn doctor(&self) -> DoctorReport {
         doctor::run_doctor(&self.env, &self.paths, &self.config, &self.adapters)
+    }
+
+    /// Create the canonical root folder if missing (explicit user action).
+    pub fn adopt_canonical_root(&self) -> Result<std::path::PathBuf> {
+        let root = self.config.canonical_root(&self.env);
+        store::adopt_canonical_root(&self.env, &root)
+    }
+
+    /// Plan an import from a skill directory into the canonical store.
+    pub fn plan_import(
+        &self,
+        source: &std::path::Path,
+        resolution: store::ConflictResolution,
+    ) -> Result<store::ImportPlan> {
+        let root = self.config.canonical_root(&self.env);
+        store::plan_import(&self.env, &self.paths, source, &root, resolution)
+    }
+
+    /// Execute a previously computed import plan (dry-run capable).
+    pub fn execute_import(
+        &self,
+        plan: &store::ImportPlan,
+        dry_run: bool,
+    ) -> Result<store::ImportOutcome> {
+        store::execute_import(&self.env, plan, dry_run)
     }
 }
 

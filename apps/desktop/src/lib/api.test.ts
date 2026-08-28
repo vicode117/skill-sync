@@ -43,4 +43,41 @@ describe("typed native api layer", () => {
     await api.runDoctor();
     expect(invokeMock).toHaveBeenCalledWith("run_doctor");
   });
+
+  it("plans imports read-only and passes the source path", async () => {
+    const plan = {
+      source: "/h/.claude/skills/a",
+      canonicalRoot: "/h/.agents/skills",
+      skillId: "a",
+      action: { kind: "create", target: "/h/.agents/skills/a" },
+      fingerprint: "ff",
+      notes: [],
+    };
+    invokeMock.mockResolvedValueOnce(plan);
+    const result = await api.planImport("/h/.claude/skills/a");
+    expect(invokeMock).toHaveBeenCalledWith("plan_import", {
+      sourcePath: "/h/.claude/skills/a",
+    });
+    expect(result).toEqual(plan);
+  });
+
+  it("executes imports with an explicit resolution", async () => {
+    invokeMock.mockResolvedValueOnce({
+      actionTaken: { kind: "create", target: "/h/.agents/skills/a" },
+      target: "/h/.agents/skills/a",
+      dryRun: false,
+    });
+    await api.importSkill("/h/.claude/skills/a", "keepBoth", false);
+    expect(invokeMock).toHaveBeenCalledWith("import_skill", {
+      sourcePath: "/h/.claude/skills/a",
+      resolution: "keepBoth",
+      dryRun: false,
+    });
+  });
+
+  it("adopts the canonical root", async () => {
+    invokeMock.mockResolvedValueOnce({ canonicalRoot: "/h/.agents/skills" });
+    await api.adoptCanonicalRoot();
+    expect(invokeMock).toHaveBeenCalledWith("adopt_canonical_root");
+  });
 });

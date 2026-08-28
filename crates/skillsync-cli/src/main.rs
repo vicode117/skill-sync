@@ -32,6 +32,22 @@ enum Commands {
     Scan,
     /// Environment diagnostics.
     Doctor,
+    /// Create the canonical skill root folder if it does not exist yet.
+    AdoptRoot,
+    /// Import a skill directory into the canonical store.
+    Import {
+        /// Path of the skill directory to import.
+        path: String,
+        /// Preview the plan without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+        /// On conflicting content: import as `<name>-2` instead of failing.
+        #[arg(long, group = "resolution")]
+        keep_both: bool,
+        /// On conflicting content: back up the canonical copy, then replace.
+        #[arg(long, group = "resolution")]
+        replace: bool,
+    },
 }
 
 fn main() {
@@ -50,6 +66,22 @@ fn run(cli: Cli) -> i32 {
         Commands::Tools => cmd_tools(&app, cli.json),
         Commands::Scan => cmd_scan(&app, cli.json),
         Commands::Doctor => cmd_doctor(&app, cli.json),
+        Commands::AdoptRoot => cmd_adopt_root(&app, cli.json),
+        Commands::Import {
+            path,
+            dry_run,
+            keep_both,
+            replace,
+        } => {
+            let resolution = if keep_both {
+                skillsync_core::ConflictResolution::KeepBoth
+            } else if replace {
+                skillsync_core::ConflictResolution::Replace
+            } else {
+                skillsync_core::ConflictResolution::Skip
+            };
+            cmd_import(&app, &path, resolution, dry_run, cli.json)
+        }
     };
 
     match result {
@@ -277,6 +309,92 @@ fn print_json<T: serde::Serialize>(value: &T) -> skillsync_core::Result<i32> {
     })?;
     println!("{text}");
     Ok(0)
+}
+
+fn cmd_adopt_root(app: &SkillSync, json: bool) -> skillsync_core::Result<i32> {
+    let root = app.adopt_canonical_root()?;
+    if json {
+        return print_json(&serde_json::json!({ "canonicalRoot": root }));
+    }
+    println!("Canonical skill root ready: {}", root.display());
+    Ok(0)
+}
+
+fn cmd_import(
+    app: &SkillSync,
+    path: &str,
+    resolution: skillsync_core::ConflictResolution,
+    dry_run: bool,
+    json: bool,
+) -> skillsync_core::Result<i32> {
+    let source = std::path::PathBuf::from(shellexpand_home(path, app));
+    let plan = app.plan_import(&source, resolution)?;
+    if dry_run && json {
+        return print_json(&plan);
+    }
+    if !json {
+        println!("IMPORT PLAN");
+        println!("  source:  {}", plan.source.display());
+        println!("  action:  {}", import_action_label(&plan.action));
+        if let Some(fp) = &plan.fingerprint {
+            println!("  content: {}…", &fp[..fp.len().min(12)]);
+        }
+        for note in &plan.notes {
+            println!("  note:    {note}");
+        }
+    }
+    let outcome = app.execute_import(&plan, dry_run)?;
+    if json {
+        return print_json(&outcome);
+    }
+    if dry_run {
+        println!("DRY RUN — no changes made.");
+    } else {
+        match &outcome.action_taken {
+            skillsync_core::ImportAction::AlreadyPresent { .. } => {
+                println!("No change — identical skill already in the canonical store.");
+            }
+            skillsync_core::ImportAction::Replace { backup_dir, .. } => {
+                println!("Replaced. Backup saved to {}", backup_dir.display());
+            }
+            _ => println!("Imported to {}", outcome.target.display()),
+        }
+    }
+    Ok(0)
+}
+
+fn import_action_label(action: &skillsync_core::ImportAction) -> String {
+    match action {
+        skillsync_core::ImportAction::Create { target } => {
+            format!("create {}", target.display())
+        }
+        skillsync_core::ImportAction::AlreadyPresent { target } => {
+            format!("no change ({} identical)", target.display())
+        }
+        skillsync_core::ImportAction::KeepBoth { target } => {
+            format!("keep both — import as {}", target.display())
+        }
+        skillsync_core::ImportAction::Replace { target, backup_dir } => {
+            format!(
+                "replace {} (backup: {})",
+                target.display(),
+                backup_dir.display()
+            )
+        }
+        skillsync_core::ImportAction::Conflict { target } => format!(
+            "CONFLICT — {} differs from the source; pass --keep-both or --replace",
+            target.display()
+        ),
+    }
+}
+
+/// Expand a leading `~` using the app's environment (CLI convenience).
+fn shellexpand_home(path: &str, app: &SkillSync) -> String {
+    if path == "~" || path.starts_with("~/") || path.starts_with("~\\") {
+        let expanded = skillsync_core::env::expand_home(path, app.env());
+        return expanded.to_string_lossy().into_owned();
+    }
+    path.to_string()
 }
 
 #[cfg(test)]
