@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import type { CheckStatus, Config, DoctorReport, SyncMethod } from "@/types/domain";
 
 export function SettingsPage() {
@@ -118,6 +119,24 @@ export function SettingsPage() {
           <p className="text-xs text-muted-foreground">
             The synchronization engine arrives in the next slice; the choice is stored now.
           </p>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border p-3">
+          <div>
+            <Label htmlFor="auto-sync">Automatic synchronization</Label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Watch the canonical store and refresh managed copies after
+              changes (debounced). Symlinked targets need no copying. Off by
+              default; manual Sync Now always stays available.
+            </p>
+          </div>
+          <Switch
+            id="auto-sync"
+            checked={config?.autoSync ?? false}
+            onCheckedChange={(checked) => {
+              if (config) setConfig({ ...config, autoSync: checked });
+            }}
+          />
         </div>
 
         <div className="flex items-center gap-3">

@@ -223,11 +223,23 @@ Vitest + Testing Library (dev).
 - `skillsync conflicts [--json]`, `skillsync resolve … [--dry-run]
   [--ignore]` / GUI Conflicts section above the skill list.
 
+## 7f. Slice 6: Automatic Sync (implemented)
+
+- `watcher.rs`: a background thread watches SkillSync's own home as the
+  event anchor; bursts are debounced (2 s quiet) and passes are rate-limited
+  (5 s minimum between runs) — editors fire many events per save (§33).
+- Every pass re-reads the config: `autoSync` (default **off**) applies
+  immediately; passes go through `sync_all`, so only managed targets ever
+  change — symlink targets are no-ops, drifted copies are updated with a
+  backup (§32). The GUI receives an `auto-sync-ran` event and refreshes;
+  manual Refresh/Sync Now always remains available (§33).
+- Watcher failure can never lose data: at worst it stops notifying; the
+  engine's own validation still guards every mutation.
+
 ## 8. Later Slices (not implemented in this pass)
 
 ~~2 Canonical store + import/fingerprint~~ (done, §7b) ·
 ~~3 one-way sync~~ (done, §7c) · ~~4 multi-tool + Skill×Tool matrix~~
-(done, §7d) · ~~5 conflict management + compare~~ (done, §7e) → 6 automatic
-sync (watcher, debounced, copy-target refresh only; off by default) →
-7 explicit git integration. Each slice lands only after the previous one is
-working and tested.
+(done, §7d) · ~~5 conflict management + compare~~ (done, §7e) ·
+~~6 automatic sync~~ (done, §7f) → 7 explicit git integration.
+Each slice lands only after the previous one is working and tested.

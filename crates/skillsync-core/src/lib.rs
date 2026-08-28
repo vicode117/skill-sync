@@ -20,6 +20,7 @@ pub mod scan;
 pub mod skill;
 pub mod store;
 pub mod sync;
+pub mod watcher;
 
 use std::sync::Arc;
 
@@ -41,6 +42,7 @@ pub use store::{
     ImportAction, ImportOutcome, ImportPlan,
 };
 pub use sync::{EffectiveMethod, EntryOutcome, PlanAction, PlanEntry, SyncPlan, SyncRunReport};
+pub use watcher::{AutoSyncHandle, AutoSyncSink, NullSink};
 
 /// Facade over the environment, config and adapters. Construct once per
 /// process (CLI run, GUI session) and call the read-only operations.

@@ -23,6 +23,7 @@ sha2 = "0.10"
 hex = "0.4"
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
+notify = "8"
 
 skillsync-core = { path = "crates/skillsync-core" }
 

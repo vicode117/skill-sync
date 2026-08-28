@@ -2,7 +2,7 @@
 //! `skillsync-core`. No business logic here; commands delegate to the core
 //! facade and return its structured error type directly.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use skillsync_core::{
     Config, ConflictReport, DiffEntry, DoctorReport, ImportOutcome, ImportPlan, Resolution,
@@ -183,6 +183,23 @@ fn poisoned() -> SkillSyncError {
     )
 }
 
+/// Bridges auto-sync passes to the frontend (design doc §7f).
+struct AutoSyncEventSink {
+    handle: tauri::AppHandle,
+}
+
+impl skillsync_core::AutoSyncSink for AutoSyncEventSink {
+    fn on_auto_sync(&self, summaries: Vec<String>) {
+        use tauri::Emitter;
+        let _ = self.handle.emit("auto-sync-ran", summaries);
+    }
+}
+
+/// Keeps the watcher thread alive for the whole session.
+struct AutoSyncState {
+    _handle: Mutex<Option<skillsync_core::AutoSyncHandle>>,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = SkillSync::discover().unwrap_or_else(|err| {
@@ -197,6 +214,29 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState {
             app: Mutex::new(app),
+        })
+        .setup(|app_handle| {
+            // Automatic synchronization (§32): off unless config.autoSync;
+            // the watcher re-reads config every cycle, so toggling applies
+            // immediately. A watcher that fails to start never blocks the
+            // app — manual Sync Now always remains available (§33).
+            use tauri::Manager;
+            if let Ok(env) = skillsync_core::EnvContext::discover() {
+                let sink = Arc::new(AutoSyncEventSink {
+                    handle: app_handle.handle().clone(),
+                });
+                if let Ok(handle) = skillsync_core::watcher::spawn_auto_sync(
+                    env,
+                    sink,
+                    std::time::Duration::from_secs(2),
+                    std::time::Duration::from_secs(5),
+                ) {
+                    app_handle.handle().manage(AutoSyncState {
+                        _handle: Mutex::new(Some(handle)),
+                    });
+                }
+            }
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_config,

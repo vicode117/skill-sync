@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FolderTree, Puzzle, Settings } from "lucide-react";
+import { listen } from "@tauri-apps/api/event";
 import { api } from "@/lib/api";
 import { useOverview } from "@/hooks/useOverview";
 import { SkillsPage } from "@/features/skills/SkillsPage";
@@ -21,6 +22,20 @@ export default function App() {
   const { overview, error, loading, refresh } = useOverview();
   const [busyTool, setBusyTool] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [autoSyncNote, setAutoSyncNote] = useState<string | null>(null);
+
+  // Automatic synchronization passes (§32) refresh the UI when they run.
+  useEffect(() => {
+    const unlisten = listen<string[]>("auto-sync-ran", (event) => {
+      void refresh();
+      setAutoSyncNote(`Auto-synced: ${event.payload.join(" · ")}`);
+      window.setTimeout(() => setAutoSyncNote(null), 8000);
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleToggleTool = useCallback(
     async (toolId: string, enabled: boolean) => {
@@ -90,6 +105,14 @@ export default function App() {
       </nav>
 
       <main className="flex-1 overflow-y-auto p-6">
+        {autoSyncNote ? (
+          <p
+            role="status"
+            className="mb-4 rounded-lg border bg-card p-3 text-xs text-muted-foreground"
+          >
+            {autoSyncNote}
+          </p>
+        ) : null}
         {error ? (
           <div className="mb-4">
             <ErrorBanner error={error} />

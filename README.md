@@ -26,9 +26,11 @@ canonical store (adopt root, import skills with fingerprinting, conflict-safe
 resolution, backups, dry-run), one-way sync (canonical → tool, symlink
 with copy fallback, managed-ownership tracking, per-change preview), and the
 Skill×Tool enablement matrix (per-skill toggles; disabling removes only the
-managed installation), and conflict management (compare view, explicit
-backed-up resolutions, ignore). Sync and resolutions run only when you
-invoke them. See `docs/ARCHITECTURE.md`.
+managed installation), conflict management (compare view, explicit
+backed-up resolutions, ignore), and optional automatic synchronization
+(debounced watcher, off by default — manual Sync Now always works).
+Sync and resolutions otherwise run only when you invoke them.
+See `docs/ARCHITECTURE.md`.
 
 ## CLI
 
