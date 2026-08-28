@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { GitCard } from "./GitCard";
 import type { CheckStatus, Config, DoctorReport, SyncMethod } from "@/types/domain";
 
 export function SettingsPage() {
@@ -158,6 +159,8 @@ export function SettingsPage() {
           ) : null}
         </div>
       </Card>
+
+      <GitCard />
 
       <Card className="space-y-3 p-5">
         <div className="flex items-center justify-between">

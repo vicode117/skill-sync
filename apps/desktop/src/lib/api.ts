@@ -4,6 +4,7 @@ import type {
   ConflictReport,
   DiffEntry,
   DoctorReport,
+  GitStatus,
   ImportOutcome,
   ImportPlan,
   ImportResolution,
@@ -67,6 +68,10 @@ export const api = {
     invoke("resolve_conflict", { skillId, toolId, resolution, dryRun }),
   setConflictIgnored: (skillId: string, toolId: string, ignored: boolean): Promise<Config> =>
     invoke("set_conflict_ignored", { skillId, toolId, ignored }),
+  gitStatus: (): Promise<GitStatus> => invoke("git_status"),
+  gitPull: (): Promise<string> => invoke("git_pull"),
+  gitCommit: (message: string): Promise<string> => invoke("git_commit", { message }),
+  gitPush: (): Promise<string> => invoke("git_push"),
 };
 
 export type Api = typeof api;

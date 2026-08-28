@@ -236,10 +236,21 @@ Vitest + Testing Library (dev).
 - Watcher failure can never lose data: at worst it stops notifying; the
   engine's own validation still guards every mutation.
 
+## 7g. Slice 7: Git Integration (implemented)
+
+- Machine sync (§34) stays a separate concept from tool sync; the canonical
+  store itself may be a git repository and the **system git** binary is
+  used (no embedded git, no shell interpolation — argument lists only).
+- `skillsync git status|pull|commit --message <m>|push` / GUI Git card:
+  branch, ahead/behind, changed skills (paths grouped per skill directory),
+  and explicit pull `--ff-only` (never merges or overwrites silently),
+  explicit commit, explicit push. Nothing git-related runs automatically
+  (§35); non-repo stores report gracefully.
+
 ## 8. Later Slices (not implemented in this pass)
 
-~~2 Canonical store + import/fingerprint~~ (done, §7b) ·
-~~3 one-way sync~~ (done, §7c) · ~~4 multi-tool + Skill×Tool matrix~~
-(done, §7d) · ~~5 conflict management + compare~~ (done, §7e) ·
-~~6 automatic sync~~ (done, §7f) → 7 explicit git integration.
-Each slice lands only after the previous one is working and tested.
+Slices 1–7 are implemented and gated behind explicit user actions for every
+filesystem mutation. Beyond the MVP (design doc §76/§77, intentionally NOT
+built): skill marketplace, cloud accounts, remote SSH/WSL environments,
+remote skill installation (§37 requires a security review first), profiles
+(§78), custom adapter plugins, skill execution, MCP/prompt/provider sync.

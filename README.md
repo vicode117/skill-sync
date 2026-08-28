@@ -27,10 +27,11 @@ resolution, backups, dry-run), one-way sync (canonical → tool, symlink
 with copy fallback, managed-ownership tracking, per-change preview), and the
 Skill×Tool enablement matrix (per-skill toggles; disabling removes only the
 managed installation), conflict management (compare view, explicit
-backed-up resolutions, ignore), and optional automatic synchronization
-(debounced watcher, off by default — manual Sync Now always works).
-Sync and resolutions otherwise run only when you invoke them.
-See `docs/ARCHITECTURE.md`.
+backed-up resolutions, ignore), optional automatic synchronization
+(debounced watcher, off by default — manual Sync Now always works), and
+explicit git machine-sync for the canonical store (system git, status /
+pull --ff-only / commit / push — never automatic). Every filesystem change
+runs only when you invoke it. See `docs/ARCHITECTURE.md`.
 
 ## CLI
 
@@ -53,6 +54,8 @@ skillsync conflicts                     # canonical vs unmanaged conflicts
 skillsync diff tdd --tool claude        # file + line-level compare
 skillsync resolve tdd --tool claude \
   --resolution use-canonical [--dry-run] # explicit, backed-up resolution
+skillsync git status                  # machine sync: branch + changed skills
+skillsync git pull | commit | push    # always explicit, never automatic
 skillsync scan --json     # machine-readable output (all commands)
 ```
 

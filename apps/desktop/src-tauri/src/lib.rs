@@ -5,8 +5,9 @@
 use std::sync::{Arc, Mutex};
 
 use skillsync_core::{
-    Config, ConflictReport, DiffEntry, DoctorReport, ImportOutcome, ImportPlan, Resolution,
-    ResolutionReport, SkillOverview, SkillSync, SkillSyncError, SyncPlan, SyncRunReport,
+    Config, ConflictReport, DiffEntry, DoctorReport, GitStatus, ImportOutcome, ImportPlan,
+    Resolution, ResolutionReport, SkillOverview, SkillSync, SkillSyncError, SyncPlan,
+    SyncRunReport,
 };
 
 /// Shared application state: one core facade instance per session.
@@ -157,6 +158,32 @@ fn set_conflict_ignored(
     Ok(app.config().clone())
 }
 
+/// Git status of the canonical store (machine sync, §35).
+#[tauri::command]
+fn git_status(state: tauri::State<AppState>) -> Result<GitStatus, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.git_status()
+}
+
+/// Explicit git operations — never automatic (§35).
+#[tauri::command]
+fn git_pull(state: tauri::State<AppState>) -> Result<String, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.git_pull()
+}
+
+#[tauri::command]
+fn git_commit(state: tauri::State<AppState>, message: String) -> Result<String, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.git_commit(&message)
+}
+
+#[tauri::command]
+fn git_push(state: tauri::State<AppState>) -> Result<String, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.git_push()
+}
+
 /// Execute an import. `resolution` is one of `skip`, `keepBoth`, `replace`;
 /// `skip` (the default) never overwrites existing canonical content.
 #[tauri::command]
@@ -253,7 +280,11 @@ pub fn run() {
             list_conflicts,
             diff_skill,
             resolve_conflict,
-            set_conflict_ignored
+            set_conflict_ignored,
+            git_status,
+            git_pull,
+            git_commit,
+            git_push
         ])
         .run(tauri::generate_context!())
         .expect("error while running SkillSync");

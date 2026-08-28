@@ -23,6 +23,21 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+enum GitAction {
+    /// Branch, ahead/behind, changed skills.
+    Status,
+    /// Pull with --ff-only (never merges or overwrites silently).
+    Pull,
+    /// Stage all changes in the store and commit with a message.
+    Commit {
+        #[arg(long)]
+        message: String,
+    },
+    /// Push to the configured upstream.
+    Push,
+}
+
+#[derive(Subcommand)]
 enum Commands {
     /// List all discovered skills (canonical + observed per tool).
     List,
@@ -71,6 +86,11 @@ enum Commands {
     },
     /// List canonical vs unmanaged-target conflicts.
     Conflicts,
+    /// Machine sync: explicit git operations on the canonical store (§35).
+    Git {
+        #[command(subcommand)]
+        action: GitAction,
+    },
     /// Directory-aware diff between a canonical skill and a tool target.
     Diff {
         /// Canonical skill directory name.
@@ -140,6 +160,7 @@ fn run(cli: Cli) -> i32 {
             }
         }
         Commands::Conflicts => cmd_conflicts(&app, cli.json),
+        Commands::Git { action } => cmd_git(&app, action, cli.json),
         Commands::Diff { skill, tool } => cmd_diff(&app, &skill, &tool, cli.json),
         Commands::Resolve {
             skill,
@@ -458,6 +479,74 @@ fn cmd_set_enabled(
         );
     }
     Ok(if report.failed.is_empty() { 0 } else { 1 })
+}
+
+fn cmd_git(app: &SkillSync, action: GitAction, json: bool) -> skillsync_core::Result<i32> {
+    match action {
+        GitAction::Status => {
+            let status = app.git_status()?;
+            if json {
+                return print_json(&status);
+            }
+            if !status.is_repo {
+                println!(
+                    "Canonical store is not a git repository{}",
+                    status.error.map(|e| format!(" ({e})")).unwrap_or_default()
+                );
+                return Ok(1);
+            }
+            println!(
+                "branch: {}{}",
+                status.branch.as_deref().unwrap_or("(detached)"),
+                if status.has_upstream {
+                    format!(" [ahead {}, behind {}]", status.ahead, status.behind)
+                } else {
+                    " (no upstream)".to_string()
+                }
+            );
+            if status.changed_skills.is_empty() {
+                println!("working tree clean");
+            } else {
+                for change in &status.changed_skills {
+                    println!(
+                        "  {:?}: {} ({} file{})",
+                        change.change,
+                        change.skill_id,
+                        change.files.len(),
+                        if change.files.len() == 1 { "" } else { "s" }
+                    );
+                }
+            }
+            Ok(0)
+        }
+        GitAction::Pull => {
+            let out = app.git_pull()?;
+            if !json {
+                println!("{out}");
+            } else {
+                print_json(&serde_json::json!({ "output": out }))?;
+            }
+            Ok(0)
+        }
+        GitAction::Commit { message } => {
+            let out = app.git_commit(&message)?;
+            if !json {
+                println!("{out}");
+            } else {
+                print_json(&serde_json::json!({ "output": out }))?;
+            }
+            Ok(0)
+        }
+        GitAction::Push => {
+            let out = app.git_push()?;
+            if !json {
+                println!("{out}");
+            } else {
+                print_json(&serde_json::json!({ "output": out }))?;
+            }
+            Ok(0)
+        }
+    }
 }
 
 fn cmd_conflicts(app: &SkillSync, json: bool) -> skillsync_core::Result<i32> {

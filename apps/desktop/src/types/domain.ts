@@ -271,3 +271,22 @@ export interface ResolutionReport {
   installed: boolean;
   notes: string[];
 }
+
+/** Git (machine sync) types, mirroring core `git` module. */
+export type SkillChange = "modified" | "added" | "deleted" | "renamed";
+
+export interface ChangedSkill {
+  skillId: string;
+  change: SkillChange;
+  files: string[];
+}
+
+export interface GitStatus {
+  isRepo: boolean;
+  branch?: string;
+  ahead: number;
+  behind: number;
+  hasUpstream: boolean;
+  changedSkills: ChangedSkill[];
+  error?: string;
+}

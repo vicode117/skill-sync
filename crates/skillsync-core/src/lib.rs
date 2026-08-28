@@ -14,6 +14,7 @@ pub mod error;
 pub mod fingerprint;
 pub mod frontmatter;
 pub mod fsutil;
+pub mod git;
 pub mod managed;
 pub mod overview;
 pub mod scan;
@@ -29,6 +30,7 @@ pub use conflict::{ConflictReport, DiffEntry, DiffKind, Resolution, ResolutionRe
 pub use doctor::{CheckStatus, DoctorCheck, DoctorReport};
 pub use env::EnvContext;
 pub use error::{ErrorCode, Result, SkillSyncError};
+pub use git::{ChangedSkill, GitStatus, SkillChange};
 pub use overview::{Installation, LocationInfo, SkillOverview, SkillRow, SyncState, ToolInfo};
 pub use scan::{
     managedness_label as scan_managedness_label, InstallKind, Managedness, ScannedSkill,
@@ -401,6 +403,30 @@ impl SkillSync {
             registry.save(&self.paths)?;
         }
         result
+    }
+
+    /// Git status of the canonical store (machine sync, §34/§35).
+    pub fn git_status(&self) -> Result<GitStatus> {
+        let root = self.config.canonical_root(&self.env);
+        git::status(&self.env, &root)
+    }
+
+    /// Explicit `git pull --ff-only` on the canonical store.
+    pub fn git_pull(&self) -> Result<String> {
+        let root = self.config.canonical_root(&self.env);
+        git::pull(&self.env, &root)
+    }
+
+    /// Explicit `git add -A` + `git commit` on the canonical store.
+    pub fn git_commit(&self, message: &str) -> Result<String> {
+        let root = self.config.canonical_root(&self.env);
+        git::commit(&self.env, &root, message)
+    }
+
+    /// Explicit `git push` on the canonical store.
+    pub fn git_push(&self) -> Result<String> {
+        let root = self.config.canonical_root(&self.env);
+        git::push(&self.env, &root)
     }
 
     /// Set a Skill×Tool enablement choice and apply it: enabling installs
