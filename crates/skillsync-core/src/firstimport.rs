@@ -123,16 +123,32 @@ pub fn plan_first_import(
     let already_canonical =
         |fp: Option<&str>| fp.is_some() && canonical_fps.iter().any(|c| *c == Some(fp.unwrap()));
 
+    let mut counts = ImportCounts::default();
+    // Adopted skills, deduplicated by id: a skill linked into several tools
+    // is still ONE already-canonical skill.
+    let mut adopted_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
     // Group unmanaged observations by content fingerprint (§21: names
     // alone never decide identity).
     let mut groups: std::collections::BTreeMap<String, Vec<&ScannedSkill>> =
         std::collections::BTreeMap::new();
     for scanned_skill in scanned {
-        if !matches!(
-            scanned_skill.managedness,
-            crate::scan::Managedness::Unmanaged
-        ) {
-            continue;
+        match &scanned_skill.managedness {
+            // Managed links into the store ARE adopted skills (§14): count
+            // them so re-planning after adoption reports the real state.
+            crate::scan::Managedness::ManagedSymlink { canonical_path } => {
+                if canonical_path.starts_with(canonical_root) {
+                    adopted_ids.insert(scanned_skill.id.clone());
+                }
+                continue;
+            }
+            crate::scan::Managedness::NativeShared => {
+                adopted_ids.insert(scanned_skill.id.clone());
+                continue;
+            }
+            crate::scan::Managedness::Unmanaged => {}
+            crate::scan::Managedness::ForeignSymlink { .. }
+            | crate::scan::Managedness::BrokenSymlink => continue,
         }
         let key = scanned_skill
             .fingerprint
@@ -141,7 +157,7 @@ pub fn plan_first_import(
         groups.entry(key).or_default().push(scanned_skill);
     }
 
-    let mut counts = ImportCounts::default();
+    counts.already_canonical = adopted_ids.len();
     let mut imports = Vec::new();
     let mut conflicts: Vec<ImportConflict> = Vec::new();
     let mut notes = Vec::new();
@@ -448,6 +464,39 @@ mod tests {
         assert_eq!(plan2.counts.already_canonical, 1, "{plan2:?}");
         assert!(plan2.imports.is_empty());
         let _ = config;
+    }
+
+    #[test]
+    fn managed_links_count_as_already_canonical() {
+        // After adopting + syncing, re-planning must report the adopted
+        // skills (present as managed links in tool dirs) as already
+        // canonical — with nothing left to import.
+        let (_tmp, env, _paths) = rig();
+        let canonical = env.home.join(".agents").join("skills");
+        write(&env.home, "claude", "tdd", V1);
+        let mut scanned = scan_skills_root(
+            &env,
+            "claude",
+            &env.home.join(".claude").join("skills"),
+            &canonical,
+            SkillScope::Global,
+        )
+        .unwrap();
+        // Simulate the post-adoption state: the tool occurrence is a
+        // SkillSync-managed link into the store.
+        let tool_entry = scanned.remove(0);
+        let linked = crate::scan::ScannedSkill {
+            managedness: Managedness::ManagedSymlink {
+                canonical_path: canonical.join("tdd"),
+            },
+            ..tool_entry
+        };
+        std::fs::create_dir_all(canonical.join("tdd")).unwrap();
+        std::fs::write(canonical.join("tdd").join("SKILL.md"), V1).unwrap();
+
+        let plan = plan_first_import(&env, &canonical, &[], &[linked], &[]);
+        assert_eq!(plan.counts.already_canonical, 1, "{plan:?}");
+        assert!(plan.imports.is_empty());
     }
 
     #[test]

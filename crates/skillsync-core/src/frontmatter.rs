@@ -51,8 +51,11 @@ pub fn parse(bytes: &[u8]) -> Result<Option<SkillFrontmatter>> {
             let json = serde_json::to_value(&map)
                 .map_err(|e| SkillSyncError::new(ErrorCode::InvalidSkill, e.to_string()))?;
             Ok(Some(SkillFrontmatter {
-                name: json_string(&json, "name"),
-                description: json_string(&json, "description"),
+                // Block scalars (`>` / `|`) keep a clipped trailing newline;
+                // the convenience fields are trimmed for display while the
+                // raw map stays byte-faithful.
+                name: json_string(&json, "name").map(|s| s.trim().to_string()),
+                description: json_string(&json, "description").map(|s| s.trim().to_string()),
                 raw: json,
             }))
         }
@@ -125,6 +128,24 @@ mod tests {
     fn rejects_non_mapping_frontmatter() {
         let err = parse(b"---\n- a\n- b\n---\n").unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidSkill);
+    }
+
+    #[test]
+    fn folded_block_scalar_is_trimmed_in_convenience_fields() {
+        // Real-world community skills (e.g. ponytail) use `description: >`;
+        // YAML folds the lines and clips one trailing newline. The
+        // convenience field is trimmed for display; raw stays verbatim.
+        let md = b"---\nname: ponytail\ndescription: >\n  Line one here\n  line two there.\nargument-hint: \"[lite|full|ultra]\"\n---\nbody";
+        let fm = parse(md).unwrap().unwrap();
+        assert_eq!(
+            fm.description.as_deref(),
+            Some("Line one here line two there.")
+        );
+        assert!(!fm.description.as_deref().unwrap().ends_with('\n'));
+        assert_eq!(
+            fm.raw.get("argument-hint").and_then(|v| v.as_str()),
+            Some("[lite|full|ultra]")
+        );
     }
 
     #[test]

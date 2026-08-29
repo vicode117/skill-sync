@@ -205,6 +205,15 @@ pub fn run_doctor(
                         managed
                     ));
                     for s in &skills {
+                        // SkillSync-created managed links are the intended
+                        // state after adoption, not duplicates (§14). Only
+                        // user-made occurrences (unmanaged copies, foreign
+                        // links, and the canonical store itself when a tool
+                        // reads it natively) participate in duplicate
+                        // detection (§42).
+                        if matches!(s.managedness, Managedness::ManagedSymlink { .. }) {
+                            continue;
+                        }
                         all_skills.push((
                             s.display_name.clone(),
                             location.path.display().to_string(),
@@ -414,6 +423,31 @@ mod tests {
         let dup = report.checks.iter().find(|c| c.id == "duplicates").unwrap();
         assert_eq!(dup.status, CheckStatus::Warning, "{:?}", dup.detail);
         assert!(dup.detail.contains("identical content"), "{}", dup.detail);
+    }
+
+    #[test]
+    fn managed_links_do_not_count_as_duplicates() {
+        // After a managed sync the same skill name appears in the canonical
+        // store and in tool directories via SkillSync-created links — the
+        // intended state (§14), not a duplicate warning.
+        let tmp = tempfile::tempdir().unwrap();
+        let env = EnvContext::with_home(tmp.path().join("home"));
+        let canonical = tmp.path().join(".agents").join("skills");
+        let claude_skills = tmp.path().join(".claude").join("skills");
+        std::fs::create_dir_all(&canonical).unwrap();
+        std::fs::create_dir_all(&claude_skills).unwrap();
+        let md = b"---\nname: linked\ndescription: d\n---\nbody";
+        std::fs::create_dir_all(canonical.join("linked")).unwrap();
+        std::fs::write(canonical.join("linked").join("SKILL.md"), md).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(canonical.join("linked"), claude_skills.join("linked")).unwrap();
+
+        let paths = AppPaths {
+            home: tmp.path().join(".skillsync"),
+        };
+        let report = run_doctor(&env, &paths, &Config::default(), &registry());
+        let dup = report.checks.iter().find(|c| c.id == "duplicates").unwrap();
+        assert_eq!(dup.status, CheckStatus::Ok, "{}", dup.detail);
     }
 
     #[test]
