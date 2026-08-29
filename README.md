@@ -1,5 +1,7 @@
 # SkillSync
 
+[![CI](https://github.com/vicode117/skill-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/vicode117/skill-sync/actions/workflows/ci.yml)
+
 > Create a Skill once, manage it in one place, and automatically make it
 > available to every supported AI coding tool.
 

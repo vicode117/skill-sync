@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Frontend gates (§74): lint, typecheck (tsc -b), vitest, vite build.
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # reads packageManager from package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  # Rust gates (§74): fmt, clippy -D warnings, tests. The desktop crate
+  # embeds the frontend bundle at compile time, so the frontend is built
+  # first. Linux needs the Tauri build prerequisites (webkit2gtk & co).
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            build-essential \
+            curl \
+            file
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Build frontend bundle (embedded by tauri codegen)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: CLI smoke test (fresh synthetic home)
+        run: |
+          HOME_TMP="$(mktemp -d)"
+          HOME="$HOME_TMP" ./target/debug/skillsync list
+          HOME="$HOME_TMP" ./target/debug/skillsync doctor --json >/dev/null
+
+  # Desktop bundle for the current platform. Gated to manual runs and
+  # version tags: macOS runners are the slowest lane, and the compile
+  # checks above already guard against breakage.
+  desktop:
+    name: Desktop (macOS)
+    runs-on: macos-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build SkillSync.app (beforeBuildCommand builds the frontend)
+        run: pnpm tauri build
+
+      - name: Smoke-check the bundle
+        run: |
+          APP="target/release/bundle/macos/SkillSync.app"
+          test -d "$APP"
+          test -x "$APP/Contents/MacOS/skillsync-desktop"
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkillSync-macos
+          path: |
+            target/release/bundle/macos/*.app
+          if-no-files-found: error
+          retention-days: 14
