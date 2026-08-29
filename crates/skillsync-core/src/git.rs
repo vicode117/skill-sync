@@ -336,6 +336,10 @@ mod tests {
         let root = tmp.path().join("store");
         std::fs::create_dir_all(&root).unwrap();
         git(&root, &["init", "-q", "-b", "main"]);
+        // Repo-local identity: CI runners have no global git user, and the
+        // production commit path must keep using the user's own identity.
+        git(&root, &["config", "user.email", "test@example.invalid"]);
+        git(&root, &["config", "user.name", "Test"]);
         let env = EnvContext::with_home(tmp.path().join("home"));
         Some(Repo { tmp, root, env })
     }
