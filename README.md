@@ -74,12 +74,10 @@ Download the latest build from
 [Releases](https://github.com/vicode117/skill-sync/releases):
 
 - **macOS (Apple Silicon)** — `SkillSync-<ver>-aarch64-macos.dmg`. The app
-  is unsigned; clear the download quarantine once after copying to
-  `/Applications`:
-
-  ```bash
-  xattr -cr /Applications/SkillSync.app
-  ```
+  is unsigned, so first launch shows *"Apple cannot verify SkillSync"*.
+  Two one-time fixes: run `xattr -cr /Applications/SkillSync.app`, **or**
+  dismiss the dialog and click **Open Anyway** in System Settings →
+  Privacy & Security.
 
 - **Windows (x64)** — `SkillSync-<ver>-x64-windows-setup.exe` (per-user
   NSIS installer; SmartScreen may ask for *More info → Run anyway*).
