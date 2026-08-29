@@ -157,6 +157,14 @@ jobs:
           test -d "$APP"
           test -x "$APP/Contents/MacOS/skillsync-desktop"
 
+      - name: Ad-hoc codesign
+        run: |
+          # Keep a valid ad-hoc signature over all resources; without a
+          # Developer ID certificate this is the best we can ship (users
+          # clear the quarantine flag once — documented in the notes).
+          codesign --force --deep --sign - "target/release/bundle/macos/SkillSync.app"
+          codesign --verify --deep "target/release/bundle/macos/SkillSync.app"
+
       - name: Upload app bundle (runs, for inspection)
         uses: actions/upload-artifact@v4
         with:
@@ -167,16 +175,21 @@ jobs:
           retention-days: 14
 
       # Tag builds become a GitHub release with the app attached.
-      - name: Zip app bundle
+      - name: Package macOS disk image
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          ditto -c -k --sequesterRsrc --keepParent \
-            "target/release/bundle/macos/SkillSync.app" \
-            "SkillSync-${{ github.ref_name }}.zip"
-          shasum -a 256 "SkillSync-${{ github.ref_name }}.zip" \
-            > "SkillSync-${{ github.ref_name }}.zip.sha256"
+          STAGING="$(mktemp -d)"
+          cp -R "target/release/bundle/macos/SkillSync.app" "$STAGING/"
+          # hdiutil instead of the AppleScript bundler: deterministic in CI.
+          hdiutil create \
+            -volname "SkillSync" \
+            -srcfolder "$STAGING" \
+            -ov -format UDZO \
+            "SkillSync-${{ github.ref_name }}-aarch64-macos.dmg"
+          shasum -a 256 "SkillSync-${{ github.ref_name }}-aarch64-macos.dmg" \
+            > "SkillSync-${{ github.ref_name }}-aarch64-macos.dmg.sha256"
 
-      - name: Create GitHub release
+      - name: Create GitHub release (macOS assets)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
@@ -184,6 +197,48 @@ jobs:
           # version when tagging.
           body_path: .github/releases/${{ github.ref_name }}.md
           files: |
-            SkillSync-${{ github.ref_name }}.zip
-            SkillSync-${{ github.ref_name }}.zip.sha256
+            SkillSync-${{ github.ref_name }}-aarch64-macos.dmg
+            SkillSync-${{ github.ref_name }}-aarch64-macos.dmg.sha256
           generate_release_notes: true
+
+  # Windows installer (NSIS .exe). Runs after the macOS job so both jobs
+  # attach their assets to the same release without racing.
+  desktop-windows:
+    name: Desktop (Windows)
+    runs-on: windows-latest
+    needs: desktop
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build Windows installer (beforeBuildCommand builds the frontend)
+        run: pnpm tauri build
+
+      - name: Package installer
+        shell: bash
+        run: |
+          ls target/release/bundle/nsis/
+          mv target/release/bundle/nsis/SkillSync_*-setup.exe \
+            "SkillSync-${{ github.ref_name }}-x64-windows-setup.exe"
+          sha256sum "SkillSync-${{ github.ref_name }}-x64-windows-setup.exe" \
+            > "SkillSync-${{ github.ref_name }}-x64-windows-setup.exe.sha256"
+
+      - name: Create GitHub release (Windows assets)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            SkillSync-${{ github.ref_name }}-x64-windows-setup.exe
+            SkillSync-${{ github.ref_name }}-x64-windows-setup.exe.sha256

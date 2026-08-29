@@ -68,6 +68,24 @@ skillsync scan --json     # machine-readable output (all commands)
 Exit codes: `0` success, `1` operational error / doctor found errors,
 `2` usage error.
 
+## Install
+
+Download the latest build from
+[Releases](https://github.com/vicode117/skill-sync/releases):
+
+- **macOS (Apple Silicon)** — `SkillSync-<ver>-aarch64-macos.dmg`. The app
+  is unsigned; clear the download quarantine once after copying to
+  `/Applications`:
+
+  ```bash
+  xattr -cr /Applications/SkillSync.app
+  ```
+
+- **Windows (x64)** — `SkillSync-<ver>-x64-windows-setup.exe` (per-user
+  NSIS installer; SmartScreen may ask for *More info → Run anyway*).
+
+Or build from source: `pnpm install && pnpm tauri build`.
+
 ## Development
 
 Prerequisites: Rust (stable), Node LTS + pnpm, platform Tauri prerequisites.
