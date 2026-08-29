@@ -131,6 +131,8 @@ jobs:
     name: Desktop (macOS)
     runs-on: macos-latest
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write # create the GitHub release and attach assets
     steps:
       - uses: actions/checkout@v4
 
@@ -155,7 +157,7 @@ jobs:
           test -d "$APP"
           test -x "$APP/Contents/MacOS/skillsync-desktop"
 
-      - name: Upload app bundle
+      - name: Upload app bundle (runs, for inspection)
         uses: actions/upload-artifact@v4
         with:
           name: SkillSync-macos
@@ -163,3 +165,25 @@ jobs:
             target/release/bundle/macos/*.app
           if-no-files-found: error
           retention-days: 14
+
+      # Tag builds become a GitHub release with the app attached.
+      - name: Zip app bundle
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "target/release/bundle/macos/SkillSync.app" \
+            "SkillSync-${{ github.ref_name }}.zip"
+          shasum -a 256 "SkillSync-${{ github.ref_name }}.zip" \
+            > "SkillSync-${{ github.ref_name }}.zip.sha256"
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          # Release notes live in .github/releases/<tag>.md — add one per
+          # version when tagging.
+          body_path: .github/releases/${{ github.ref_name }}.md
+          files: |
+            SkillSync-${{ github.ref_name }}.zip
+            SkillSync-${{ github.ref_name }}.zip.sha256
+          generate_release_notes: true
