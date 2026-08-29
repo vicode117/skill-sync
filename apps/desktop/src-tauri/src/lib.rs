@@ -5,9 +5,9 @@
 use std::sync::{Arc, Mutex};
 
 use skillsync_core::{
-    Config, ConflictReport, DiffEntry, DoctorReport, GitStatus, ImportOutcome, ImportPlan,
-    Resolution, ResolutionReport, SkillOverview, SkillSync, SkillSyncError, SyncPlan,
-    SyncRunReport,
+    Config, ConflictReport, DiffEntry, DoctorReport, FirstImportPlan, FirstImportReport, GitStatus,
+    ImportOutcome, ImportPlan, Resolution, ResolutionReport, SkillOverview, SkillSync,
+    SkillSyncError, SyncPlan, SyncRunReport,
 };
 
 /// Shared application state: one core facade instance per session.
@@ -158,6 +158,24 @@ fn set_conflict_ignored(
     Ok(app.config().clone())
 }
 
+/// First-import plan (§19/§56/§57).
+#[tauri::command]
+fn first_import_plan(state: tauri::State<AppState>) -> Result<FirstImportPlan, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.first_import_plan()
+}
+
+/// Apply a first-import plan (create-only; dry-run capable).
+#[tauri::command]
+fn apply_first_import(
+    state: tauri::State<AppState>,
+    plan: FirstImportPlan,
+    dry_run: Option<bool>,
+) -> Result<FirstImportReport, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.apply_first_import(&plan, dry_run.unwrap_or(false))
+}
+
 /// Git status of the canonical store (machine sync, §35).
 #[tauri::command]
 fn git_status(state: tauri::State<AppState>) -> Result<GitStatus, SkillSyncError> {
@@ -284,7 +302,9 @@ pub fn run() {
             git_status,
             git_pull,
             git_commit,
-            git_push
+            git_push,
+            first_import_plan,
+            apply_first_import
         ])
         .run(tauri::generate_context!())
         .expect("error while running SkillSync");

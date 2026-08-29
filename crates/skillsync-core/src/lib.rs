@@ -12,6 +12,7 @@ pub mod doctor;
 pub mod env;
 pub mod error;
 pub mod fingerprint;
+pub mod firstimport;
 pub mod frontmatter;
 pub mod fsutil;
 pub mod git;
@@ -30,6 +31,7 @@ pub use conflict::{ConflictReport, DiffEntry, DiffKind, Resolution, ResolutionRe
 pub use doctor::{CheckStatus, DoctorCheck, DoctorReport};
 pub use env::EnvContext;
 pub use error::{ErrorCode, Result, SkillSyncError};
+pub use firstimport::{FirstImportPlan, FirstImportReport, ImportConflict, PlannedImport};
 pub use git::{ChangedSkill, GitStatus, SkillChange};
 pub use overview::{Installation, LocationInfo, SkillOverview, SkillRow, SyncState, ToolInfo};
 pub use scan::{
@@ -403,6 +405,36 @@ impl SkillSync {
             registry.save(&self.paths)?;
         }
         result
+    }
+
+    /// Plan the first import (§19/§56/§57): classify every observed skill
+    /// as already-canonical, unique-import, or conflict. Read-only.
+    pub fn first_import_plan(&self) -> Result<FirstImportPlan> {
+        let canonical_skills = self.canonical_skills()?;
+        let scanned = self.scan_all()?;
+        let canonical_root = self.config.canonical_root(&self.env);
+        let tool_names: Vec<(String, String)> = self
+            .adapters
+            .iter()
+            .map(|a| (a.id().to_string(), a.display_name().to_string()))
+            .collect();
+        Ok(firstimport::plan_first_import(
+            &self.env,
+            &canonical_root,
+            &canonical_skills,
+            &scanned,
+            &tool_names,
+        ))
+    }
+
+    /// Apply a first-import plan by reusing the import machinery:
+    /// create-only, never overwrites, dry-run capable.
+    pub fn apply_first_import(
+        &self,
+        plan: &FirstImportPlan,
+        dry_run: bool,
+    ) -> Result<FirstImportReport> {
+        firstimport::apply_first_import(self, plan, dry_run)
     }
 
     /// Git status of the canonical store (machine sync, §34/§35).

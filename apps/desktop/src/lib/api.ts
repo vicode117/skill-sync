@@ -4,6 +4,8 @@ import type {
   ConflictReport,
   DiffEntry,
   DoctorReport,
+  FirstImportPlan,
+  FirstImportReport,
   GitStatus,
   ImportOutcome,
   ImportPlan,
@@ -72,6 +74,9 @@ export const api = {
   gitPull: (): Promise<string> => invoke("git_pull"),
   gitCommit: (message: string): Promise<string> => invoke("git_commit", { message }),
   gitPush: (): Promise<string> => invoke("git_push"),
+  firstImportPlan: (): Promise<FirstImportPlan> => invoke("first_import_plan"),
+  applyFirstImport: (plan: FirstImportPlan, dryRun = false): Promise<FirstImportReport> =>
+    invoke("apply_first_import", { plan, dryRun }),
 };
 
 export type Api = typeof api;

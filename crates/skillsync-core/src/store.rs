@@ -57,6 +57,18 @@ pub enum ImportAction {
     Conflict { target: PathBuf },
 }
 
+impl ImportAction {
+    pub fn kind_label(&self) -> &'static str {
+        match self {
+            ImportAction::Create { .. } => "create",
+            ImportAction::AlreadyPresent { .. } => "alreadyPresent",
+            ImportAction::KeepBoth { .. } => "keepBoth",
+            ImportAction::Replace { .. } => "replace",
+            ImportAction::Conflict { .. } => "conflict",
+        }
+    }
+}
+
 /// The complete, previewable plan for one import (§58 dry-run model).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

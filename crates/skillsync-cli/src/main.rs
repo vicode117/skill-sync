@@ -86,6 +86,16 @@ enum Commands {
     },
     /// List canonical vs unmanaged-target conflicts.
     Conflicts,
+    /// First-import plan: classify every observed skill (§19/§57).
+    ImportPlan,
+    /// Import every content-unique skill into the canonical store
+    /// (conflicts are left for explicit resolution; tool directories are
+    /// never modified).
+    ImportAll {
+        /// Preview without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Machine sync: explicit git operations on the canonical store (§35).
     Git {
         #[command(subcommand)]
@@ -160,6 +170,8 @@ fn run(cli: Cli) -> i32 {
             }
         }
         Commands::Conflicts => cmd_conflicts(&app, cli.json),
+        Commands::ImportPlan => cmd_import_plan(&app, cli.json),
+        Commands::ImportAll { dry_run } => cmd_import_all(&app, dry_run, cli.json),
         Commands::Git { action } => cmd_git(&app, action, cli.json),
         Commands::Diff { skill, tool } => cmd_diff(&app, &skill, &tool, cli.json),
         Commands::Resolve {
@@ -547,6 +559,65 @@ fn cmd_git(app: &SkillSync, action: GitAction, json: bool) -> skillsync_core::Re
             Ok(0)
         }
     }
+}
+
+fn cmd_import_plan(app: &SkillSync, json: bool) -> skillsync_core::Result<i32> {
+    let plan = app.first_import_plan()?;
+    if json {
+        return print_json(&plan);
+    }
+    println!(
+        "First import plan — store {}: {} unique, {} exact duplicate(s), {} conflict(s), {} already canonical",
+        plan.canonical_root_display,
+        plan.counts.unique,
+        plan.counts.exact_duplicates,
+        plan.counts.conflicts,
+        plan.counts.already_canonical
+    );
+    for import in &plan.imports {
+        println!(
+            "  IMPORT  {:<22} from {} ({})",
+            import.skill_name, import.source_tool_id, import.source_display
+        );
+    }
+    for conflict in &plan.conflicts {
+        println!(
+            "  CONFLICT {} — same name, different content:",
+            conflict.skill_name
+        );
+        for occ in &conflict.occurrences {
+            println!("    {:<10} {}", occ.tool_id, occ.display_path);
+        }
+    }
+    Ok(0)
+}
+
+fn cmd_import_all(app: &SkillSync, dry_run: bool, json: bool) -> skillsync_core::Result<i32> {
+    let plan = app.first_import_plan()?;
+    let report = app.apply_first_import(&plan, dry_run)?;
+    if json {
+        return print_json(&report);
+    }
+    if dry_run {
+        println!("DRY RUN — no changes made.");
+    }
+    for name in &report.imported {
+        println!("  imported {name}");
+    }
+    for skip in &report.skipped {
+        println!("  skipped  {}: {}", skip.skill_name, skip.reason);
+    }
+    for fail in &report.failed {
+        println!("  FAILED   {}: {}", fail.skill_name, fail.error);
+    }
+    println!(
+        "First import — {} imported, {} skipped, {} failed{}",
+        report.imported.len(),
+        report.skipped.len(),
+        report.failed.len(),
+        if dry_run { " (dry run)" } else { "" }
+    );
+    Ok(if report.failed.is_empty() { 0 } else { 1 })
 }
 
 fn cmd_conflicts(app: &SkillSync, json: bool) -> skillsync_core::Result<i32> {

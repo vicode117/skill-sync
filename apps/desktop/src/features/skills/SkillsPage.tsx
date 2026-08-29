@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ImportControl } from "./ImportControl";
 import { ConflictsSection } from "./ConflictsSection";
+import { FirstImportBanner } from "./FirstImportBanner";
 import type { SkillRow, SkillOverview, SyncState, ValidationIssue } from "@/types/domain";
 import { STATUS_LABELS, STATUS_MARKS } from "@/types/domain";
 
@@ -81,6 +82,7 @@ export function SkillsPage({
 
   return (
     <section aria-label="Skills" className="space-y-4">
+      <FirstImportBanner onChanged={() => void onRefresh()} />
       <ConflictsSection onResolved={() => void onRefresh()} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

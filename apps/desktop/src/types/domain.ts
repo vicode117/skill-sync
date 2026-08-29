@@ -290,3 +290,59 @@ export interface GitStatus {
   changedSkills: ChangedSkill[];
   error?: string;
 }
+
+/** First-import plan (§19/§56/§57), mirroring core `firstimport`. */
+export interface ImportCounts {
+  unique: number;
+  exactDuplicates: number;
+  conflicts: number;
+  alreadyCanonical: number;
+}
+
+export interface PlannedImport {
+  skillName: string;
+  sourceToolId: string;
+  sourcePath: string;
+  sourceDisplay: string;
+  target: string;
+  targetDisplay: string;
+  fingerprint?: string;
+}
+
+export interface ImportConflictOccurrence {
+  toolId: string;
+  path: string;
+  displayPath: string;
+  fingerprint?: string;
+}
+
+export interface ImportConflict {
+  skillName: string;
+  occurrences: ImportConflictOccurrence[];
+}
+
+export interface FirstImportPlan {
+  canonicalRoot: string;
+  canonicalRootDisplay: string;
+  counts: ImportCounts;
+  imports: PlannedImport[];
+  conflicts: ImportConflict[];
+  notes: string[];
+}
+
+export interface SkippedImport {
+  skillName: string;
+  reason: string;
+}
+
+export interface FailedImport {
+  skillName: string;
+  error: string;
+}
+
+export interface FirstImportReport {
+  dryRun: boolean;
+  imported: string[];
+  skipped: SkippedImport[];
+  failed: FailedImport[];
+}
