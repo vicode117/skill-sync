@@ -114,11 +114,14 @@ jobs:
             echo "::error::${line//%/%%}"
           done
 
+      - name: Build CLI
+        run: cargo build --quiet -p skillsync-cli
+
       - name: CLI smoke test (fresh synthetic home)
         run: |
           HOME_TMP="$(mktemp -d)"
-          HOME="$HOME_TMP" cargo run --quiet -p skillsync-cli -- list
-          HOME="$HOME_TMP" cargo run --quiet -p skillsync-cli -- doctor --json >/dev/null
+          HOME="$HOME_TMP" ./target/debug/skillsync list
+          HOME="$HOME_TMP" ./target/debug/skillsync doctor --json >/dev/null
 
   # Desktop bundle for the current platform. Gated to manual runs and
   # version tags: macOS runners are the slowest lane, and the compile
