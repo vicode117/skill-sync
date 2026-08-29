@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { GitCompareArrows, TriangleAlert } from "lucide-react";
 import { api, normalizeError } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type {
@@ -16,6 +17,7 @@ import type {
  * automatically and everything replaced is backed up first (§18, §30).
  */
 export function ConflictsSection({ onResolved }: { onResolved: () => void }) {
+  const { t } = useI18n();
   const [conflicts, setConflicts] = useState<ConflictReport[]>([]);
   const [error, setError] = useState<SkillSyncError | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -88,16 +90,10 @@ export function ConflictsSection({ onResolved }: { onResolved: () => void }) {
     >
       <div className="flex items-center gap-2">
         <TriangleAlert className="size-4 text-warning" aria-hidden />
-        <h2 className="text-sm font-semibold">
-          Conflicts need your decision
-        </h2>
+        <h2 className="text-sm font-semibold">{t("conflicts.title")}</h2>
         <Badge variant="warning">{conflicts.length}</Badge>
       </div>
-      <p className="text-xs text-muted-foreground">
-        A canonical skill and an unmanaged copy with the same name hold
-        different content. Nothing is changed until you choose; whatever is
-        replaced is backed up first.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("conflicts.body")}</p>
 
       {error ? (
         <p role="alert" className="text-xs text-destructive">
@@ -123,14 +119,14 @@ export function ConflictsSection({ onResolved }: { onResolved: () => void }) {
                     onClick={() => void compare(conflict)}
                   >
                     <GitCompareArrows className="size-3.5" aria-hidden />
-                    {expanded === key ? "Hide diff" : "Compare"}
+                    {expanded === key ? t("conflicts.hideDiff") : t("conflicts.compare")}
                   </Button>
                   <Button
                     size="sm"
                     disabled={busy === key}
                     onClick={() => void resolve(conflict, "useCanonical")}
                   >
-                    Use canonical
+                    {t("conflicts.useCanonical")}
                   </Button>
                   <Button
                     size="sm"
@@ -138,7 +134,7 @@ export function ConflictsSection({ onResolved }: { onResolved: () => void }) {
                     disabled={busy === key}
                     onClick={() => void resolve(conflict, "importTarget")}
                   >
-                    Import {conflict.toolDisplayName} version
+                    {t("conflicts.importVersion", { tool: conflict.toolDisplayName })}
                   </Button>
                   <Button
                     size="sm"
@@ -146,7 +142,7 @@ export function ConflictsSection({ onResolved }: { onResolved: () => void }) {
                     disabled={busy === key}
                     onClick={() => void resolve(conflict, "keepBoth")}
                   >
-                    Keep both
+                    {t("conflicts.keepBoth")}
                   </Button>
                   <Button
                     size="sm"
@@ -158,22 +154,22 @@ export function ConflictsSection({ onResolved }: { onResolved: () => void }) {
                       )
                     }
                   >
-                    Ignore
+                    {t("conflicts.ignore")}
                   </Button>
                 </div>
               </div>
               <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
                 <p>
-                  Canonical: <span className="font-mono">{conflict.canonicalDisplay}</span>
+                  {t("conflicts.canonical")} <span className="font-mono">{conflict.canonicalDisplay}</span>
                 </p>
                 <p>
-                  Target: <span className="font-mono">{conflict.targetDisplay}</span>
+                  {t("conflicts.target")} <span className="font-mono">{conflict.targetDisplay}</span>
                 </p>
               </div>
               {expanded === key && diff !== null ? (
                 <div className="mt-3 max-h-64 overflow-y-auto rounded-md border p-2 font-mono text-[11px]" data-testid="conflict-diff">
                   {diff.length === 0 ? (
-                    <p className="text-muted-foreground">No file-level differences.</p>
+                    <p className="text-muted-foreground">{t("conflicts.noDifferences")}</p>
                   ) : (
                     diff.map((entry) => (
                       <div key={entry.relativePath} className="mb-2">

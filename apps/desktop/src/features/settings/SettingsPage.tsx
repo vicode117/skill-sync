@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { GitCard } from "./GitCard";
+import { useI18n } from "@/lib/i18n";
 import type { CheckStatus, Config, DoctorReport, SyncMethod } from "@/types/domain";
 
 export function SettingsPage() {
+  const { t, lang, setLang } = useI18n();
   const [config, setConfig] = useState<Config | null>(null);
   const [canonicalRoot, setCanonicalRoot] = useState("");
   const [saving, setSaving] = useState(false);
@@ -75,12 +77,24 @@ export function SettingsPage() {
   return (
     <section aria-label="Settings" className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Configuration lives in <code>~/.skillsync/config.json</code>. Skill files are never
-          stored here.
-        </p>
+        <h1 className="text-xl font-semibold">{t("settings.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("settings.configNote")}</p>
       </div>
+
+      <Card className="flex items-center justify-between p-5">
+        <div>
+          <Label htmlFor="ui-language">{t("settings.language")}</Label>
+        </div>
+        <select
+          id="ui-language"
+          value={lang}
+          onChange={(e) => setLang(e.target.value as "en" | "zh")}
+          className="h-9 w-48 rounded-md border border-input bg-card px-3 text-sm"
+        >
+          <option value="en">English</option>
+          <option value="zh">简体中文</option>
+        </select>
+      </Card>
 
       {error ? (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -90,21 +104,18 @@ export function SettingsPage() {
 
       <Card className="space-y-4 p-5">
         <div className="space-y-2">
-          <Label htmlFor="canonical-root">Canonical skill root</Label>
+          <Label htmlFor="canonical-root">{t("settings.canonicalRoot")}</Label>
           <Input
             id="canonical-root"
             value={canonicalRoot}
             onChange={(e) => setCanonicalRoot(e.target.value)}
             placeholder="~/.agents/skills"
           />
-          <p className="text-xs text-muted-foreground">
-            The single source of truth for your skills. May start with <code>~</code>. It can be
-            a plain folder or a git repository.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("settings.canonicalRootHelp")}</p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="sync-method">Sync method</Label>
+          <Label htmlFor="sync-method">{t("settings.syncMethod")}</Label>
           <select
             id="sync-method"
             value={config?.syncMethod ?? "auto"}
@@ -113,23 +124,17 @@ export function SettingsPage() {
             }
             className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
           >
-            <option value="auto">auto — link where safe, copy otherwise</option>
-            <option value="symlink">symlink — single physical copy</option>
-            <option value="copy">copy — fingerprint-tracked copies</option>
+            <option value="auto">{t("settings.syncMethod.auto")}</option>
+            <option value="symlink">{t("settings.syncMethod.symlink")}</option>
+            <option value="copy">{t("settings.syncMethod.copy")}</option>
           </select>
-          <p className="text-xs text-muted-foreground">
-            The synchronization engine arrives in the next slice; the choice is stored now.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("settings.syncMethodHelp")}</p>
         </div>
 
         <div className="flex items-center justify-between rounded-lg border p-3">
           <div>
-            <Label htmlFor="auto-sync">Automatic synchronization</Label>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Watch the canonical store and refresh managed copies after
-              changes (debounced). Symlinked targets need no copying. Off by
-              default; manual Sync Now always stays available.
-            </p>
+            <Label htmlFor="auto-sync">{t("settings.autoSync")}</Label>
+            <p className="mt-1 text-xs text-muted-foreground">{t("settings.autoSyncHelp")}</p>
           </div>
           <Switch
             id="auto-sync"
@@ -142,19 +147,19 @@ export function SettingsPage() {
 
         <div className="flex items-center gap-3">
           <Button onClick={() => void save()} disabled={saving || !config}>
-            {saving ? "Saving…" : "Save settings"}
+            {saving ? t("settings.saving") : t("settings.save")}
           </Button>
           <Button variant="outline" onClick={() => void adoptRoot()} disabled={adopting}>
-            {adopting ? "Creating…" : "Create canonical folder"}
+            {adopting ? t("settings.creating") : t("settings.createFolder")}
           </Button>
           {adopted ? (
             <span className="text-sm text-success" role="status">
-              Ready: {adopted}
+              {t("settings.ready", { path: adopted })}
             </span>
           ) : null}
           {saved ? (
             <span className="text-sm text-success" role="status">
-              Saved.
+              {t("settings.saved")}
             </span>
           ) : null}
         </div>
@@ -165,14 +170,12 @@ export function SettingsPage() {
       <Card className="space-y-3 p-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold">Diagnostics</h2>
-            <p className="text-sm text-muted-foreground">
-              Environment checks shared with <code>skillsync doctor</code>.
-            </p>
+            <h2 className="font-semibold">{t("settings.diagnostics")}</h2>
+            <p className="text-sm text-muted-foreground">{t("settings.diagnosticsHelp")}</p>
           </div>
           <Button variant="outline" onClick={() => void runDoctor()} disabled={doctorBusy}>
             <Stethoscope className="size-4" aria-hidden />
-            {doctorBusy ? "Running…" : "Run doctor"}
+            {doctorBusy ? t("settings.running") : t("settings.runDoctor")}
           </Button>
         </div>
         {doctor ? (
@@ -188,7 +191,7 @@ export function SettingsPage() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Run the check to inspect this machine.</p>
+          <p className="text-sm text-muted-foreground">{t("settings.runToInspect")}</p>
         )}
       </Card>
     </section>

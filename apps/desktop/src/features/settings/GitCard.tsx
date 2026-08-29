@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CloudDownload, CloudUpload, GitBranch, GitCommitHorizontal } from "lucide-react";
 import { api, normalizeError } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import type { GitStatus, SkillSyncError } from "@/types/domain";
  * pulls or pushes on its own.
  */
 export function GitCard() {
+  const { t } = useI18n();
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [message, setMessage] = useState("Sync skills");
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,12 +45,8 @@ export function GitCard() {
     <Card className="space-y-3 p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-semibold">Git repository (machine sync)</h2>
-          <p className="text-sm text-muted-foreground">
-            The canonical store can live in git. Every action here is
-            explicit — nothing is ever committed, pulled or pushed
-            automatically.
-          </p>
+          <h2 className="font-semibold">{t("git.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("git.description")}</p>
         </div>
         {status?.isRepo ? (
           <Badge variant="success">
@@ -56,10 +54,10 @@ export function GitCard() {
             {status.branch ?? "(detached)"}
             {status.hasUpstream
               ? ` ↑${status.ahead} ↓${status.behind}`
-              : " · no upstream"}
+              : t("git.noUpstream")}
           </Badge>
         ) : (
-          <Badge variant="muted">not a git repository</Badge>
+          <Badge variant="muted">{t("git.notRepo")}</Badge>
         )}
       </div>
 
@@ -82,13 +80,13 @@ export function GitCard() {
                   </Badge>
                   <span className="font-medium">{change.skillId}</span>
                   <span className="text-xs text-muted-foreground">
-                    {change.files.length} file{change.files.length === 1 ? "" : "s"}
+                    {t("git.files", { count: change.files.length })}
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">Working tree clean.</p>
+            <p className="text-sm text-muted-foreground">{t("git.workingTreeClean")}</p>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
@@ -99,14 +97,14 @@ export function GitCard() {
               onClick={() => void run(() => api.gitPull(), "pull")}
             >
               <CloudDownload className="size-3.5" aria-hidden />
-              {busy === "pull" ? "Pulling…" : "Pull (ff-only)"}
+              {busy === "pull" ? t("git.pulling") : t("git.pull")}
             </Button>
             <Input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Commit message"
+              placeholder={t("git.commitMessage")}
               className="h-8 max-w-xs"
-              aria-label="Commit message"
+              aria-label={t("git.commitMessage")}
             />
             <Button
               variant="outline"
@@ -115,7 +113,7 @@ export function GitCard() {
               onClick={() => void run(() => api.gitCommit(message), "commit")}
             >
               <GitCommitHorizontal className="size-3.5" aria-hidden />
-              {busy === "commit" ? "Committing…" : "Commit all changes"}
+              {busy === "commit" ? t("git.committing") : t("git.commitAll")}
             </Button>
             <Button
               variant="outline"
@@ -124,18 +122,14 @@ export function GitCard() {
               onClick={() => void run(() => api.gitPush(), "push")}
             >
               <CloudUpload className="size-3.5" aria-hidden />
-              {busy === "push" ? "Pushing…" : "Push"}
+              {busy === "push" ? t("git.pushing") : t("git.push")}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Pull uses <code>--ff-only</code>; it never merges or overwrites
-            local changes silently.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("git.ffNote")}</p>
         </>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Run <code>git init</code> in the canonical store (or point it at a
-          clone) to enable machine sync.
+          {t("git.initHint")}
         </p>
       )}
 

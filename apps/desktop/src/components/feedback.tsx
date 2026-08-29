@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { AlertTriangle, Info, RefreshCw } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import type { SkillSyncError } from "@/types/domain";
 
 export function ErrorBanner({ error }: { error: SkillSyncError }) {
+  const { t } = useI18n();
   return (
     <div
       role="alert"
@@ -10,7 +12,7 @@ export function ErrorBanner({ error }: { error: SkillSyncError }) {
     >
       <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
       <div>
-        <p className="font-medium text-destructive">Native operation failed</p>
+        <p className="font-medium text-destructive">{t("errors.nativeFailed")}</p>
         <p className="mt-1 text-foreground">{error.message}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           code: {error.code}
@@ -38,6 +40,7 @@ export function RefreshButton({
   onClick: () => void;
   loading: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -46,7 +49,7 @@ export function RefreshButton({
       className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 text-sm font-medium hover:bg-accent disabled:opacity-50"
     >
       <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
-      Refresh
+      {t("common.refresh")}
     </button>
   );
 }

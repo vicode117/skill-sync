@@ -137,7 +137,9 @@ describe("SkillsPage", () => {
     expect(screen.getByText("git-commit")).toBeInTheDocument();
     expect(screen.getByText("legacy-tool")).toBeInTheDocument();
     expect(screen.getByText("~/.agents/skills/git-commit")).toBeInTheDocument();
-    expect(screen.getByText("2 skills · canonical store ~/.agents/skills")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 skill(s) · canonical store ~/.agents/skills"),
+    ).toBeInTheDocument();
   });
 
   it("filters by search query", async () => {

@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { SyncControl } from "./SyncControl";
+import { useI18n } from "@/lib/i18n";
 import type { SkillOverview, ToolInfo } from "@/types/domain";
 
 export function ToolsPage({
@@ -18,15 +19,14 @@ export function ToolsPage({
   onToggleTool: (toolId: string, enabled: boolean) => Promise<void>;
   busyTool: string | null;
 }) {
+  const { t } = useI18n();
   const tools = overview?.tools ?? [];
   return (
     <section aria-label="Tools" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Tools</h1>
-          <p className="text-sm text-muted-foreground">
-            Detected AI coding tools and their skill locations.
-          </p>
+          <h1 className="text-xl font-semibold">{t("tools.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("tools.subtitle")}</p>
         </div>
         <RefreshButton onClick={onRefresh} loading={loading} />
       </div>
@@ -57,18 +57,19 @@ function ToolCard({
   busy: boolean;
   onSynced: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card className="p-4" data-testid="tool-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold">{tool.displayName}</h2>
           <Badge variant={tool.detection.installed ? "success" : "muted"}>
-            {tool.detection.installed ? "Detected" : "Not detected"}
+            {tool.detection.installed ? t("tools.detected") : t("tools.notDetected")}
           </Badge>
           <Badge variant="outline">{tool.id}</Badge>
         </div>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          Integration
+          {t("tools.integration")}
           <Switch
             checked={tool.enabled}
             disabled={busy}
@@ -84,12 +85,12 @@ function ToolCard({
         {tool.locations.map((loc) => (
           <div key={loc.path} className="flex flex-wrap items-baseline gap-x-2 text-sm">
             <span className="font-mono text-xs">{loc.displayPath}</span>
-            {loc.nativeCanonical ? <Badge variant="success">canonical store</Badge> : null}
-            {loc.overridden ? <Badge variant="secondary">override</Badge> : null}
+            {loc.nativeCanonical ? <Badge variant="success">{t("tools.canonicalStore")}</Badge> : null}
+            {loc.overridden ? <Badge variant="secondary">{t("tools.override")}</Badge> : null}
             <span className="text-xs text-muted-foreground">
               {loc.exists
                 ? `${loc.skillCount} skills · ${loc.managedCount} managed`
-                : "directory missing"}
+                : t("tools.dirMissing")}
             </span>
           </div>
         ))}
@@ -97,14 +98,21 @@ function ToolCard({
 
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span>
-          Skills discovered: <strong className="text-foreground">{tool.skillCount}</strong> (
-          {tool.managedCount} managed)
+          {t("tools.discovered")}{" "}
+          <strong className="text-foreground">
+            {tool.skillCount}
+          </strong>
+          {t("tools.managedSuffix", { managed: tool.managedCount })}
         </span>
         <span>
-          Symlinks: <strong className="text-foreground">{tool.symlinkSupport}</strong>
+          {t("tools.symlinks")}{" "}
+          <strong className="text-foreground">
+            {t(`symlink.${tool.symlinkSupport}`)}
+          </strong>
         </span>
         <span>
-          Reload: <strong className="text-foreground">{tool.reloadGuidance.summary}</strong>
+          {t("tools.reload")}{" "}
+          <strong className="text-foreground">{tool.reloadGuidance.summary}</strong>
         </span>
       </div>
 

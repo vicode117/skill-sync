@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PackageOpen } from "lucide-react";
 import { api, normalizeError } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type {
@@ -20,6 +21,7 @@ export function FirstImportBanner({
 }: {
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [plan, setPlan] = useState<FirstImportPlan | null>(null);
   const [report, setReport] = useState<FirstImportReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,19 +70,16 @@ export function FirstImportBanner({
         className="rounded-xl border bg-card p-4 text-sm"
         data-testid="first-import"
       >
-        <p className="font-medium">Imported {report.imported.length} skill(s) into the canonical store.</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Tool directories were not modified. Run a sync to install them into
-          your tools as managed links or copies.
-        </p>
+        <p className="font-medium">{t("firstImport.doneTitle", { count: report.imported.length })}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("firstImport.doneBody")}</p>
         {report.skipped.length + report.failed.length > 0 ? (
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
             {report.skipped.map((s) => (
-              <li key={s.skillName}>skipped {s.skillName}: {s.reason}</li>
+              <li key={s.skillName}>{t("firstImport.skipped", { name: s.skillName, reason: s.reason })}</li>
             ))}
             {report.failed.map((f) => (
               <li key={f.skillName} className="text-destructive">
-                failed {f.skillName}: {f.error}
+                {t("firstImport.failed", { name: f.skillName, error: f.error })}
               </li>
             ))}
           </ul>
@@ -101,42 +100,37 @@ export function FirstImportBanner({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <PackageOpen className="size-4 text-primary" aria-hidden />
-          <h2 className="text-sm font-semibold">Adopt your existing skills</h2>
-          <Badge variant="secondary">{plan.counts.unique} unique</Badge>
+          <h2 className="text-sm font-semibold">{t("firstImport.title")}</h2>
+          <Badge variant="secondary">{t("firstImport.unique", { count: plan.counts.unique })}</Badge>
           {plan.counts.exactDuplicates > 0 ? (
-            <Badge variant="muted">{plan.counts.exactDuplicates} duplicate files</Badge>
+            <Badge variant="muted">{t("firstImport.duplicates", { count: plan.counts.exactDuplicates })}</Badge>
           ) : null}
           {plan.conflicts.length > 0 ? (
-            <Badge variant="warning">{plan.conflicts.length} conflict(s)</Badge>
+            <Badge variant="warning">{t("firstImport.conflictsBadge", { count: plan.conflicts.length })}</Badge>
           ) : null}
         </div>
         <Button size="sm" onClick={() => void apply()} disabled={busy || plan.imports.length === 0}>
-          {busy
-            ? "Importing…"
-            : `Import ${plan.imports.length} skill${plan.imports.length === 1 ? "" : "s"}`}
+          {busy ? t("firstImport.importing") : t("firstImport.importN", { count: plan.imports.length })}
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Importing copies skills into {plan.canonicalRootDisplay} — your tool
-        directories stay untouched. Conflicts (same name, different content)
-        are never merged automatically.
+        {t("firstImport.body", { root: plan.canonicalRootDisplay })}
       </p>
       <ul className="space-y-1 text-xs">
         {plan.imports.map((entry) => (
           <li key={entry.sourcePath} className="flex flex-wrap items-baseline gap-2">
             <span className="font-medium">{entry.skillName}</span>
             <span className="text-muted-foreground">
-              from {entry.sourceToolId} · {entry.sourceDisplay}
+              {t("firstImport.from", { tool: entry.sourceToolId, path: entry.sourceDisplay })}
             </span>
           </li>
         ))}
         {plan.conflicts.map((conflict) => (
-          <li
-            key={conflict.skillName}
-            className="text-warning"
-          >
-            {conflict.skillName}: {conflict.occurrences.length} different versions —
-            resolve manually after adopting the rest
+          <li key={conflict.skillName} className="text-warning">
+            {t("firstImport.conflictLine", {
+              name: conflict.skillName,
+              count: conflict.occurrences.length,
+            })}
           </li>
         ))}
       </ul>

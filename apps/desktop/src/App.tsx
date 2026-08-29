@@ -8,13 +8,14 @@ import { ToolsPage } from "@/features/tools/ToolsPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { ErrorBanner } from "@/components/feedback";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 type PageId = "skills" | "tools" | "settings";
 
-const NAV: { id: PageId; label: string; icon: typeof Puzzle }[] = [
-  { id: "skills", label: "Skills", icon: FolderTree },
-  { id: "tools", label: "Tools", icon: Puzzle },
-  { id: "settings", label: "Settings", icon: Settings },
+const NAV: { id: PageId; key: "skills" | "tools" | "settings"; icon: typeof Puzzle }[] = [
+  { id: "skills", key: "skills", icon: FolderTree },
+  { id: "tools", key: "tools", icon: Puzzle },
+  { id: "settings", key: "settings", icon: Settings },
 ];
 
 export default function App() {
@@ -22,13 +23,14 @@ export default function App() {
   const { overview, error, loading, refresh } = useOverview();
   const [busyTool, setBusyTool] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
+  const { t } = useI18n();
   const [autoSyncNote, setAutoSyncNote] = useState<string | null>(null);
 
   // Automatic synchronization passes (§32) refresh the UI when they run.
   useEffect(() => {
     const unlisten = listen<string[]>("auto-sync-ran", (event) => {
       void refresh();
-      setAutoSyncNote(`Auto-synced: ${event.payload.join(" · ")}`);
+      setAutoSyncNote(t("app.autoSyncNote", { summary: event.payload.join(" · ") }));
       window.setTimeout(() => setAutoSyncNote(null), 8000);
     });
     return () => {
@@ -80,27 +82,29 @@ export default function App() {
           <span className="font-semibold">SkillSync</span>
         </div>
         <ul className="mt-2 space-y-1">
-          {NAV.map(({ id, label, icon: Icon }) => (
-            <li key={id}>
-              <button
-                type="button"
-                onClick={() => setPage(id)}
-                aria-current={page === id ? "page" : undefined}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium",
-                  page === id
-                    ? "bg-secondary text-secondary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                )}
-              >
-                <Icon className="size-4" aria-hidden />
-                {label}
-              </button>
-            </li>
-          ))}
+          {NAV.map(({ id, key, icon: Icon }) => {
+            return (
+              <li key={id}>
+                <button
+                  type="button"
+                  onClick={() => setPage(id)}
+                  aria-current={page === id ? "page" : undefined}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium",
+                    page === id
+                      ? "bg-secondary text-secondary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  {t(`nav.${key}`)}
+                </button>
+              </li>
+            );
+          })}
         </ul>
         <p className="mt-auto px-2 pb-1 text-[11px] leading-4 text-muted-foreground">
-          Local-first skill management. One canonical store, every tool in sync.
+          {t("app.tagline")}
         </p>
       </nav>
 

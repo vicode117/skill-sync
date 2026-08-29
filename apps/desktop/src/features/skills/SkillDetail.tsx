@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ExternalLink, FolderTree, Loader2 } from "lucide-react";
 import { api, normalizeError } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import type { SkillRow, SkillSyncError } from "@/types/domain";
 
@@ -10,6 +11,7 @@ import type { SkillRow, SkillSyncError } from "@/types/domain";
  * external editors remain first-class.
  */
 export function SkillDetail({ row }: { row: SkillRow }) {
+  const { t } = useI18n();
   const [preview, setPreview] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,21 +52,21 @@ export function SkillDetail({ row }: { row: SkillRow }) {
       <div className="grid gap-2 sm:grid-cols-2">
         {fingerprint ? (
           <p>
-            <span className="text-muted-foreground">Fingerprint: </span>
+            <span className="text-muted-foreground">{t("skills.fingerprint")}</span>
             <span className="font-mono">
               {fingerprint.slice(0, 16)}…
             </span>
           </p>
         ) : null}
         <p>
-          <span className="text-muted-foreground">Installations: </span>
+          <span className="text-muted-foreground">{t("skills.installations")}</span>
           {row.installations.length}
         </p>
       </div>
 
       <div className="space-y-1">
         <p className="flex items-center gap-1 font-medium">
-          <FolderTree className="size-3" aria-hidden /> Locations
+          <FolderTree className="size-3" aria-hidden /> {t("skills.locations")}
         </p>
         <ul className="space-y-1">
           {canonical ? (
@@ -76,9 +78,9 @@ export function SkillDetail({ row }: { row: SkillRow }) {
                 variant="ghost"
                 className="h-6 px-1.5"
                 onClick={() => void openDir(canonical.path)}
-                aria-label="Open canonical directory in file explorer"
+                aria-label={t("skills.openCanonical")}
               >
-                <ExternalLink className="size-3" aria-hidden /> Open
+                <ExternalLink className="size-3" aria-hidden /> {t("skills.open")}
               </Button>
             </li>
           ) : null}
@@ -93,9 +95,9 @@ export function SkillDetail({ row }: { row: SkillRow }) {
                   variant="ghost"
                   className="h-6 px-1.5"
                   onClick={() => void openDir(install.path)}
-                  aria-label={`Open ${install.toolId} directory in file explorer`}
+                  aria-label={t("skills.openToolDir", { tool: install.toolId })}
                 >
-                  <ExternalLink className="size-3" aria-hidden /> Open
+                  <ExternalLink className="size-3" aria-hidden /> {t("skills.open")}
                 </Button>
               </li>
             ))}
@@ -117,11 +119,9 @@ export function SkillDetail({ row }: { row: SkillRow }) {
             }}
           >
             {loading ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-            {previewPath !== null ? "Hide SKILL.md" : "Preview SKILL.md"}
+            {previewPath !== null ? t("skills.hidePreview") : t("skills.preview")}
           </Button>
-          <span className="text-muted-foreground">
-            Read-only preview — external editors remain first-class.
-          </span>
+          <span className="text-muted-foreground">{t("skills.previewNote")}</span>
         </div>
         {preview !== null ? (
           <pre

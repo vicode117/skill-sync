@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 import { ImportControl } from "./ImportControl";
 import { SkillDetail } from "./SkillDetail";
 import { ConflictsSection } from "./ConflictsSection";
 import { FirstImportBanner } from "./FirstImportBanner";
 import type { SkillRow, SkillOverview, SyncState, ValidationIssue } from "@/types/domain";
-import { STATUS_LABELS, STATUS_MARKS } from "@/types/domain";
+import { STATUS_MARKS } from "@/types/domain";
 
 const STATUS_VARIANTS: Record<SyncState, "success" | "warning" | "destructive" | "muted"> = {
   synced: "success",
@@ -34,16 +35,6 @@ const FILTER_STATUSES = [
 ] as const;
 type StatusFilter = (typeof FILTER_STATUSES)[number];
 
-const FILTER_LABELS: Record<StatusFilter, string> = {
-  all: "All",
-  synced: "Synced",
-  native: "Native",
-  unmanaged: "Unmanaged",
-  notInstalled: "Not installed",
-  conflict: "Conflict",
-  unavailable: "Unavailable",
-};
-
 export function SkillsPage({
   overview,
   loading,
@@ -57,6 +48,7 @@ export function SkillsPage({
   onToggleSkillTool: (skillId: string, toolId: string, enabled: boolean) => Promise<void>;
   toggling: string | null;
 }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [toolFilter, setToolFilter] = useState<string>("all");
@@ -88,11 +80,16 @@ export function SkillsPage({
       <ConflictsSection onResolved={() => void onRefresh()} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Skills</h1>
+          <h1 className="text-xl font-semibold">{t("skills.title")}</h1>
           <p className="text-sm text-muted-foreground">
             {overview
-              ? `${rows.length} skill${rows.length === 1 ? "" : "s"} · canonical store ${overview.canonicalRootDisplay}${overview.canonicalRootExists ? "" : " (not created yet)"}`
-              : "Loading…"}
+              ? t("skills.count", {
+                  count: rows.length,
+                  root:
+                    overview.canonicalRootDisplay +
+                    (overview.canonicalRootExists ? "" : t("skills.canonicalMissing")),
+                })
+              : t("common.loading")}
           </p>
         </div>
         <RefreshButton onClick={onRefresh} loading={loading} />
@@ -101,13 +98,13 @@ export function SkillsPage({
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="search"
-          placeholder="Search skills…"
+          placeholder={t("skills.searchPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="max-w-xs"
-          aria-label="Search skills"
+          aria-label={t("skills.ariaSearch")}
         />
-        <div className="flex flex-wrap gap-1" role="group" aria-label="Status filter">
+        <div className="flex flex-wrap gap-1" role="group" aria-label={t("skills.ariaStatusFilter")}>
           {FILTER_STATUSES.map((s) => (
             <button
               key={s}
@@ -120,11 +117,11 @@ export function SkillsPage({
                   : "bg-secondary text-secondary-foreground hover:bg-accent"
               }`}
             >
-              {FILTER_LABELS[s]}
+              {t(`skills.filters.${s}`)}
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-1" role="group" aria-label="Tool filter">
+        <div className="flex flex-wrap gap-1" role="group" aria-label={t("skills.ariaToolFilter")}>
           <button
             type="button"
             onClick={() => setToolFilter("all")}
@@ -135,7 +132,7 @@ export function SkillsPage({
                 : "bg-secondary text-secondary-foreground hover:bg-accent"
             }`}
           >
-            All tools
+            {t("skills.allTools")}
           </button>
           {(overview?.tools ?? []).map((t) => (
             <button
@@ -158,8 +155,8 @@ export function SkillsPage({
       {filtered.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground">
           {rows.length === 0
-            ? "No skills discovered yet. Install tools or adopt skills into the canonical store first."
-            : "No skills match the current filters."}
+            ? t("skills.emptyNone")
+            : t("skills.emptyFiltered")}
         </Card>
       ) : (
         <ul className="space-y-3">
@@ -192,6 +189,7 @@ function SkillCard({
   onToggleTool: (toolId: string, enabled: boolean) => Promise<void>;
   toggling: string | null;
 }) {
+  const { t } = useI18n();
   const importableSource = row.canonical
     ? null
     : (row.installations.find(
@@ -202,11 +200,11 @@ function SkillCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold">{row.name}</h2>
-          <Badge variant={STATUS_VARIANTS[row.status]}>{STATUS_LABELS[row.status]}</Badge>
+          <Badge variant={STATUS_VARIANTS[row.status]}>{t(`state.${row.status}`)}</Badge>
           {row.canonical ? (
-            <Badge variant="outline">canonical</Badge>
+            <Badge variant="outline">{t("skills.badgeCanonical")}</Badge>
           ) : (
-            <Badge variant="muted">unmanaged</Badge>
+            <Badge variant="muted">{t("skills.badgeUnmanaged")}</Badge>
           )}
         </div>
         <div className="flex flex-wrap gap-1.5" aria-label="Tool matrix">
@@ -226,6 +224,7 @@ function SkillCard({
                 toolId={tool.id}
                 label={shortTool(tool.id)}
                 state={state}
+                stateLabel={state ? t(`state.${state}`) : t("state.notInstalled")}
                 busy={toggling === `${row.key}:${tool.id}`}
                 onToggle={
                   toggleable && state !== undefined
@@ -258,6 +257,7 @@ function SkillCard({
 }
 
 function DetailToggle({ row }: { row: SkillRow }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   return (
     <div className="mt-2">
@@ -268,7 +268,7 @@ function DetailToggle({ row }: { row: SkillRow }) {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
       >
-        {open ? "Hide details" : "Details"}
+        {open ? t("skills.hideDetails") : t("skills.details")}
       </Button>
       {open ? <SkillDetail row={row} /> : null}
     </div>
@@ -279,19 +279,21 @@ function ToolMatrixChip({
   toolId,
   label,
   state,
+  stateLabel,
   busy,
   onToggle,
 }: {
   toolId: string;
   label: string;
   state?: SyncState;
+  stateLabel: string;
   busy: boolean;
   onToggle?: (enabled: boolean) => void;
 }) {
   const known = state !== undefined && state !== "notInstalled" && state !== "disabled";
   const title = state
-    ? `${label}: ${STATUS_LABELS[state]}${onToggle ? " — click to toggle" : ""}`
-    : `${label}: not installed`;
+    ? `${label}: ${stateLabel}${onToggle ? " — click to toggle" : ""}`
+    : `${label}: ${stateLabel}`;
   const className = `inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${
     known ? "border-border bg-card" : "border-transparent bg-muted text-muted-foreground"
   }${onToggle ? " cursor-pointer hover:bg-accent" : ""}`;

@@ -138,7 +138,7 @@ describe("ToolsPage", () => {
     expect(await screen.findByText(/symlink into/)).toBeInTheDocument();
     expect(screen.getByText(/unmanaged conflict/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Apply \(1 change\)/ }));
+    await user.click(screen.getByRole("button", { name: /Apply \(1 changes?\)/ }));
     expect(api.syncTool).toHaveBeenCalledWith("claude", false);
     await screen.findByText(/1 succeeded, 0 failed/);
     expect(onRefresh).toHaveBeenCalled();

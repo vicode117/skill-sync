@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, Undo2 } from "lucide-react";
 import { api, normalizeError } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import type { ImportPlan, ImportResolution, SkillSyncError } from "@/types/domain";
 
@@ -16,6 +17,7 @@ export function ImportControl({
   sourcePath: string;
   onImported: () => void;
 }) {
+  const { t } = useI18n();
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -40,8 +42,8 @@ export function ImportControl({
       const outcome = await api.importSkill(sourcePath, resolution);
       setDone(
         outcome.actionTaken.kind === "replace"
-          ? `Imported (previous copy backed up to ${outcome.actionTaken.backupDir})`
-          : `Imported to ${outcome.target}`,
+          ? t("skills.importedBackup", { path: outcome.actionTaken.backupDir })
+          : t("skills.importedTo", { path: outcome.target }),
       );
       setPlan(null);
       onImported();
@@ -66,12 +68,12 @@ export function ImportControl({
       {!plan ? (
         <Button variant="outline" size="sm" onClick={() => void preview()} disabled={busy}>
           <Download className="size-3.5" aria-hidden />
-          {busy ? "Planning…" : "Import to canonical store"}
+          {busy ? t("skills.planning") : t("skills.importToStore")}
         </Button>
       ) : (
         <div className="space-y-2 text-xs">
           <p className="font-medium">
-            Import plan:{" "}
+            {t("skills.importPlan")}{" "}
             <span className="font-mono">{describeAction(plan)}</span>
           </p>
           {plan.notes.map((note, i) => (
@@ -82,27 +84,27 @@ export function ImportControl({
           {plan.action.kind === "conflict" ? (
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" disabled={busy} onClick={() => void apply("keepBoth")}>
-                Keep both
+                {t("skills.keepBoth")}
               </Button>
               <Button size="sm" variant="destructive" disabled={busy} onClick={() => void apply("replace")}>
-                Replace (backup first)
+                {t("skills.replaceBackup")}
               </Button>
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPlan(null)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           ) : plan.action.kind === "alreadyPresent" ? (
             <Button size="sm" variant="ghost" onClick={() => setPlan(null)}>
-              Close
+              {t("common.close")}
             </Button>
           ) : (
             <div className="flex flex-wrap gap-2">
               <Button size="sm" disabled={busy} onClick={() => void apply("skip")}>
-                Confirm import
+                {t("skills.confirmImport")}
               </Button>
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPlan(null)}>
                 <Undo2 className="size-3" aria-hidden />
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           )}

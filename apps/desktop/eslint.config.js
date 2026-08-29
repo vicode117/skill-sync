@@ -43,4 +43,12 @@ export default tseslint.config(
       "react-refresh/only-export-components": "off",
     },
   },
+  {
+    // The i18n module exports the provider component together with the
+    // useI18n hook — splitting them would break the context ergonomics.
+    files: ["src/lib/i18n.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
 );
