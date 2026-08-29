@@ -208,7 +208,9 @@ mod tests {
         .unwrap();
 
         std::fs::write(env.home.join(".skillsync").join("noise"), b"x").unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        // Generous budget: CI runners can be slow to deliver inotify/FSEvents
+        // events and to spin up the first pass.
+        let deadline = Instant::now() + Duration::from_secs(20);
         while handle.runs() == 0 && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(100));
         }

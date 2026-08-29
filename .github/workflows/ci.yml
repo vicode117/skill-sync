@@ -89,7 +89,25 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Test
-        run: cargo test --workspace
+        run: |
+          set -o pipefail
+          cargo test --workspace 2>&1 | tee /tmp/cargo-test.log
+
+      - name: Summarize test failures
+        if: failure()
+        run: |
+          {
+            echo "## Test failures"
+            echo '```'
+            grep -E "panicked at|FAILED|failures:|assertion|left:|right:|running \d+ tests|test result" /tmp/cargo-test.log | head -80
+            echo '```'
+            echo '<details><summary>Last 120 lines of test output</summary>'
+            echo
+            echo '```'
+            tail -120 /tmp/cargo-test.log
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: CLI smoke test (fresh synthetic home)
         run: |
