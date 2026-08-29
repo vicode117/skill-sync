@@ -10,6 +10,32 @@ vi.mock("@/lib/api", () => ({
     saveConfig: vi.fn(),
     scanOverview: vi.fn(),
     runDoctor: vi.fn(),
+    adoptCanonicalRoot: vi.fn(),
+    planImport: vi.fn(),
+    importSkill: vi.fn(),
+    planSync: vi.fn(),
+    syncTool: vi.fn(),
+    syncAll: vi.fn(),
+    setSkillToolEnabled: vi.fn(),
+    listConflicts: vi.fn().mockResolvedValue([]),
+    diffSkill: vi.fn(),
+    resolveConflict: vi.fn(),
+    setConflictIgnored: vi.fn(),
+    gitStatus: vi.fn(),
+    gitPull: vi.fn(),
+    gitCommit: vi.fn(),
+    gitPush: vi.fn(),
+    firstImportPlan: vi.fn().mockResolvedValue({
+      canonicalRoot: "/h/.agents/skills",
+      canonicalRootDisplay: "~/.agents/skills",
+      counts: { unique: 0, exactDuplicates: 0, conflicts: 0, alreadyCanonical: 0 },
+      imports: [],
+      conflicts: [],
+      notes: [],
+    }),
+    applyFirstImport: vi.fn(),
+    readSkillFile: vi.fn(),
+    openInExplorer: vi.fn(),
   },
 }));
 
@@ -156,5 +182,25 @@ describe("SkillsPage", () => {
     const claudeChip = within(gitCard!).getByRole("button", { name: /Claude/ });
     await user.click(claudeChip);
     expect(onToggleSkillTool).toHaveBeenCalledWith("git-commit", "claude", false);
+  });
+
+  it("shows the detail view with fingerprint and a read-only SKILL.md preview", async () => {
+    const user = userEvent.setup();
+    const { api } = await import("@/lib/api");
+    vi.mocked(api.readSkillFile).mockResolvedValueOnce("---\nname: git-commit\n---\nbody");
+    renderPage();
+    const cards = screen.getAllByTestId("skill-card");
+    const gitCard = cards.find((el) => within(el).queryByText("git-commit") !== null)!;
+    await user.click(within(gitCard).getByRole("button", { name: "Details" }));
+    // Fingerprint shown (from the fixture: canonical fingerprint "abc").
+    expect(within(gitCard).getByText(/Fingerprint:/)).toBeInTheDocument();
+    // Open-in-explorer buttons exist for canonical + installation.
+    expect(
+      within(gitCard).getByRole("button", { name: "Open canonical directory in file explorer" }),
+    ).toBeInTheDocument();
+    // Preview loads through the typed API with the canonical path.
+    await user.click(within(gitCard).getByRole("button", { name: /Preview SKILL.md/ }));
+    expect(api.readSkillFile).toHaveBeenCalledWith("/home/tester/.agents/skills/git-commit/SKILL.md");
+    expect(await within(gitCard).findByTestId("skill-preview")).toHaveTextContent("git-commit");
   });
 });

@@ -75,6 +75,8 @@ export const api = {
   gitCommit: (message: string): Promise<string> => invoke("git_commit", { message }),
   gitPush: (): Promise<string> => invoke("git_push"),
   firstImportPlan: (): Promise<FirstImportPlan> => invoke("first_import_plan"),
+  readSkillFile: (path: string): Promise<string> => invoke("read_skill_file", { path }),
+  openInExplorer: (path: string): Promise<void> => invoke("open_in_explorer", { path }),
   applyFirstImport: (plan: FirstImportPlan, dryRun = false): Promise<FirstImportReport> =>
     invoke("apply_first_import", { plan, dryRun }),
 };

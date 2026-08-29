@@ -480,6 +480,71 @@ fn find_free_name(root: &Path, name: &str) -> String {
     candidate
 }
 
+/// Read a text file inside a skill for preview (§26): capped size, UTF-8
+/// only, read-only. Callers must have validated the path against the
+/// allowed roots (see `SkillSync::read_skill_file`).
+pub fn read_text_file(path: &Path) -> Result<String> {
+    const MAX: u64 = 256 * 1024;
+    let meta = std::fs::metadata(path).map_err(|e| SkillSyncError::io(&e, path))?;
+    if !meta.is_file() {
+        return Err(SkillSyncError::new(ErrorCode::InvalidSkill, "not a file").with_path(path));
+    }
+    if meta.len() > MAX {
+        return Err(SkillSyncError::new(
+            ErrorCode::Io,
+            format!("file too large for preview (> {} bytes)", MAX),
+        )
+        .with_path(path)
+        .recoverable());
+    }
+    let bytes = std::fs::read(path).map_err(|e| SkillSyncError::io(&e, path))?;
+    String::from_utf8(bytes).map_err(|_| {
+        SkillSyncError::new(ErrorCode::Io, "file is not valid UTF-8 text")
+            .with_path(path)
+            .recoverable()
+    })
+}
+
+/// Open a directory in the OS file explorer (§26). Read-only with respect
+/// to skill content; uses the platform opener, never a shell string.
+pub fn open_in_explorer(path: &Path) -> Result<()> {
+    if !path.is_dir() {
+        return Err(SkillSyncError::new(ErrorCode::UnsafePath, "not a directory").with_path(path));
+    }
+    let lossy = path.to_string_lossy().into_owned();
+    #[cfg(target_os = "macos")]
+    let (program, args): (&str, Vec<&str>) = ("open", vec![lossy.as_str()]);
+    #[cfg(target_os = "windows")]
+    let (program, args): (&str, Vec<&str>) = ("explorer", vec![lossy.as_str()]);
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let (program, args): (&str, Vec<&str>) = ("xdg-open", vec![lossy.as_str()]);
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "windows",
+        all(unix, not(target_os = "macos"))
+    )))]
+    {
+        let _ = lossy;
+        return Err(SkillSyncError::new(
+            ErrorCode::Io,
+            "opening file explorers is not supported on this platform",
+        ));
+    }
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "windows",
+        all(unix, not(target_os = "macos"))
+    ))]
+    {
+        std::process::Command::new(program)
+            .args(args)
+            .spawn()
+            .map_err(|e| SkillSyncError::io(&e, path))?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

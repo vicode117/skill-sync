@@ -4,7 +4,9 @@ import { RefreshButton } from "@/components/feedback";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { ImportControl } from "./ImportControl";
+import { SkillDetail } from "./SkillDetail";
 import { ConflictsSection } from "./ConflictsSection";
 import { FirstImportBanner } from "./FirstImportBanner";
 import type { SkillRow, SkillOverview, SyncState, ValidationIssue } from "@/types/domain";
@@ -249,7 +251,27 @@ function SkillCard({
       {importableSource ? (
         <ImportControl sourcePath={importableSource} onImported={onImported} />
       ) : null}
+
+      <DetailToggle row={row} />
     </Card>
+  );
+}
+
+function DetailToggle({ row }: { row: SkillRow }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2">
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-6 px-1.5 text-xs"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        {open ? "Hide details" : "Details"}
+      </Button>
+      {open ? <SkillDetail row={row} /> : null}
+    </div>
   );
 }
 

@@ -461,6 +461,57 @@ impl SkillSync {
         git::push(&self.env, &root)
     }
 
+    /// Read a text file from an allowed skill location for preview (§26).
+    /// Allowed: the canonical store and every adapter's configured global
+    /// skill location. Everything else is refused.
+    pub fn read_skill_file(&self, path: &std::path::Path) -> Result<String> {
+        let resolved = path
+            .canonicalize()
+            .map_err(|e| SkillSyncError::io(&e, path))?;
+        let allowed = self.allowed_roots();
+        if !allowed.iter().any(|root| resolved.starts_with(root)) {
+            return Err(SkillSyncError::new(
+                ErrorCode::UnsafePath,
+                "path is not inside an allowed skill location",
+            )
+            .with_path(path));
+        }
+        store::read_text_file(&resolved)
+    }
+
+    /// Open a skill directory in the OS file explorer (§26). The path must
+    /// be inside an allowed skill location.
+    pub fn open_skill_dir(&self, path: &std::path::Path) -> Result<()> {
+        let resolved = path
+            .canonicalize()
+            .map_err(|e| SkillSyncError::io(&e, path))?;
+        let allowed = self.allowed_roots();
+        if !allowed.iter().any(|root| resolved.starts_with(root)) {
+            return Err(SkillSyncError::new(
+                ErrorCode::UnsafePath,
+                "path is not inside an allowed skill location",
+            )
+            .with_path(path));
+        }
+        store::open_in_explorer(&resolved)
+    }
+
+    /// Directories SkillSync may read/open: the canonical store plus every
+    /// adapter's configured global skill locations.
+    fn allowed_roots(&self) -> Vec<std::path::PathBuf> {
+        let mut roots = vec![self.config.canonical_root(&self.env)];
+        for adapter in &self.adapters {
+            let over = self.config.tool(adapter.id()).cloned().unwrap_or_default();
+            for location in adapter.global_skill_locations(&self.env, &over) {
+                roots.push(location.path);
+            }
+        }
+        roots
+            .iter()
+            .map(|r| r.canonicalize().unwrap_or_else(|_| r.clone()))
+            .collect()
+    }
+
     /// Set a Skill×Tool enablement choice and apply it: enabling installs
     /// that one installation, disabling removes only the managed one (§27).
     pub fn set_skill_tool_enabled(

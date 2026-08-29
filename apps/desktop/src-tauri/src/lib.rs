@@ -176,6 +176,20 @@ fn apply_first_import(
     app.apply_first_import(&plan, dry_run.unwrap_or(false))
 }
 
+/// Read a text file from an allowed skill location for preview (§26).
+#[tauri::command]
+fn read_skill_file(state: tauri::State<AppState>, path: String) -> Result<String, SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.read_skill_file(std::path::Path::new(&path))
+}
+
+/// Open a skill directory in the OS file explorer (§26).
+#[tauri::command]
+fn open_in_explorer(state: tauri::State<AppState>, path: String) -> Result<(), SkillSyncError> {
+    let app = state.app.lock().map_err(|_| poisoned())?;
+    app.open_skill_dir(std::path::Path::new(&path))
+}
+
 /// Git status of the canonical store (machine sync, §35).
 #[tauri::command]
 fn git_status(state: tauri::State<AppState>) -> Result<GitStatus, SkillSyncError> {
@@ -304,7 +318,9 @@ pub fn run() {
             git_commit,
             git_push,
             first_import_plan,
-            apply_first_import
+            apply_first_import,
+            read_skill_file,
+            open_in_explorer
         ])
         .run(tauri::generate_context!())
         .expect("error while running SkillSync");
