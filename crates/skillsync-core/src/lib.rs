@@ -16,6 +16,7 @@ pub mod firstimport;
 pub mod frontmatter;
 pub mod fsutil;
 pub mod git;
+pub mod log;
 pub mod managed;
 pub mod overview;
 pub mod scan;
@@ -445,20 +446,41 @@ impl SkillSync {
 
     /// Explicit `git pull --ff-only` on the canonical store.
     pub fn git_pull(&self) -> Result<String> {
-        let root = self.config.canonical_root(&self.env);
-        git::pull(&self.env, &root)
+        self.git_op("git-pull", |root| git::pull(&self.env, root))
     }
 
     /// Explicit `git add -A` + `git commit` on the canonical store.
     pub fn git_commit(&self, message: &str) -> Result<String> {
-        let root = self.config.canonical_root(&self.env);
-        git::commit(&self.env, &root, message)
+        let message = message.to_string();
+        self.git_op("git-commit", move |root| {
+            git::commit(&self.env, root, &message)
+        })
     }
 
     /// Explicit `git push` on the canonical store.
     pub fn git_push(&self) -> Result<String> {
+        self.git_op("git-push", |root| git::push(&self.env, root))
+    }
+
+    fn git_op(
+        &self,
+        operation: &str,
+        run: impl Fn(&std::path::Path) -> Result<String>,
+    ) -> Result<String> {
         let root = self.config.canonical_root(&self.env);
-        git::push(&self.env, &root)
+        let result = run(&root);
+        match &result {
+            Ok(out) => {
+                crate::log::ok(operation).path(root.clone()).emit(&self.env);
+                Ok(out.clone())
+            }
+            Err(err) => {
+                crate::log::error(operation, "GIT_FAILED", &err.message)
+                    .path(root.clone())
+                    .emit(&self.env);
+                Err(err.clone())
+            }
+        }
     }
 
     /// Read a text file from an allowed skill location for preview (§26).

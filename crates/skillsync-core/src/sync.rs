@@ -678,6 +678,33 @@ pub fn execute_sync(ctx: &SyncContext, plan: &SyncPlan, dry_run: bool) -> Result
         registry.save(ctx.paths)?;
     }
 
+    if !dry_run {
+        let entry_path = |skill_id: &str| {
+            plan.entries
+                .iter()
+                .find(|e| e.skill_id == skill_id)
+                .and_then(|e| action_target(&e.action))
+        };
+        for outcome in &succeeded {
+            crate::log::ok("sync")
+                .tool(&plan.tool_id)
+                .skill(&outcome.skill_id)
+                .path_opt(entry_path(&outcome.skill_id))
+                .emit(ctx.env);
+        }
+        for outcome in &failed {
+            crate::log::error(
+                "sync",
+                "SYNC_FAILED",
+                outcome.error.as_deref().unwrap_or("unknown"),
+            )
+            .tool(&plan.tool_id)
+            .skill(&outcome.skill_id)
+            .path_opt(entry_path(&outcome.skill_id))
+            .emit(ctx.env);
+        }
+    }
+
     Ok(SyncRunReport {
         tool_id: plan.tool_id.clone(),
         method: plan.method,
@@ -685,6 +712,21 @@ pub fn execute_sync(ctx: &SyncContext, plan: &SyncPlan, dry_run: bool) -> Result
         succeeded,
         failed,
     })
+}
+
+/// The filesystem path an action targets, for logs and reports.
+fn action_target(action: &PlanAction) -> Option<PathBuf> {
+    match action {
+        PlanAction::CreateLink { target, .. }
+        | PlanAction::CreateCopy { target, .. }
+        | PlanAction::UpdateCopy { target, .. }
+        | PlanAction::RepairLink { target, .. }
+        | PlanAction::RemoveManagedLink { target }
+        | PlanAction::RemoveManagedCopy { target, .. } => Some(target.clone()),
+        PlanAction::NoChange { target } => target.clone(),
+        PlanAction::Skip { target, .. } => target.clone(),
+        PlanAction::Native | PlanAction::Disabled => None,
+    }
 }
 
 fn make_symlink(source: &Path, target: &Path) -> std::result::Result<(), String> {

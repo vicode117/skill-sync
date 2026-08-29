@@ -230,6 +230,30 @@ pub fn plan_import(
 /// Execute a previously computed plan. With `dry_run` nothing is written.
 /// The source directory is never modified.
 pub fn execute_import(env: &EnvContext, plan: &ImportPlan, dry_run: bool) -> Result<ImportOutcome> {
+    let result = execute_import_inner(env, plan, dry_run);
+    if !dry_run {
+        match &result {
+            Ok(outcome) => {
+                crate::log::ok("import")
+                    .skill(&plan.skill_id)
+                    .path_opt(Some(outcome.target.clone()))
+                    .emit(env);
+            }
+            Err(err) => {
+                crate::log::error("import", "IMPORT_FAILED", &err.message)
+                    .skill(&plan.skill_id)
+                    .emit(env);
+            }
+        }
+    }
+    result
+}
+
+fn execute_import_inner(
+    env: &EnvContext,
+    plan: &ImportPlan,
+    dry_run: bool,
+) -> Result<ImportOutcome> {
     let target = match &plan.action {
         ImportAction::Create { target }
         | ImportAction::KeepBoth { target }

@@ -30,8 +30,10 @@ managed installation), conflict management (compare view, explicit
 backed-up resolutions, ignore), optional automatic synchronization
 (debounced watcher, off by default — manual Sync Now always works), and
 explicit git machine-sync for the canonical store (system git, status /
-pull --ff-only / commit / push — never automatic). Every filesystem change
-runs only when you invoke it. See `docs/ARCHITECTURE.md`.
+pull --ff-only / commit / push — never automatic), a guided first-import
+plan for adopting existing skills, per-skill detail views, and structured
+operation logs under `~/.skillsync/logs/`. Every filesystem change runs
+only when you invoke it. See `docs/ARCHITECTURE.md`.
 
 ## CLI
 
@@ -50,6 +52,8 @@ skillsync sync --tool claude --dry-run    # preview the plan only
 skillsync sync --all                      # every detected, enabled tool
 skillsync disable tdd --tool gemini       # remove only the managed install
 skillsync enable tdd --tool gemini        # install it again
+skillsync import-plan                     # adopt existing skills (§19)
+skillsync import-all [--dry-run]          # import content-unique skills
 skillsync conflicts                     # canonical vs unmanaged conflicts
 skillsync diff tdd --tool claude        # file + line-level compare
 skillsync resolve tdd --tool claude \

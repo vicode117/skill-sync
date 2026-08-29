@@ -248,6 +248,27 @@ Vitest + Testing Library (dev).
   explicit commit, explicit push. Nothing git-related runs automatically
   (§35); non-repo stores report gracefully.
 
+## 7i. Slices 8–10: First Import, Detail View, Operation Log
+
+- **First import (§19/§56/§57)** — `firstimport.rs`: every observed skill
+  is classified by content — already-canonical (fingerprint match),
+  unique imports (one entry per content group), exact-duplicate count, and
+  same-name/different-content conflicts (never merged, listed with all
+  occurrences). `skillsync import-plan` / `import-all [--dry-run]`; the GUI
+  shows a first-run banner with counts + sources and an explicit Import
+  button. Applying reuses the import machinery: create-only, never
+  overwrites, tool directories untouched, raced entries skipped with a
+  reason.
+- **Skill detail (§26)** — expandable detail per skill card: fingerprint,
+  locations with open-in-file-explorer, read-only size-capped SKILL.md
+  preview. Reads are constrained to the canonical store and configured
+  tool locations; deliberately not an editor.
+- **Operation log (§50)** — JSONL under `~/.skillsync/logs/skillsync.log`:
+  operation, tool, skill, path, status, error codes (import / sync /
+  resolve / git). No skill contents, no environment secrets (credential-
+  like lines are redacted); single-step size rotation; logging is
+  best-effort and can never break a user operation.
+
 ## 8. Later Slices (not implemented in this pass)
 
 Slices 1–7 are implemented and gated behind explicit user actions for every
